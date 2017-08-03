@@ -13,7 +13,7 @@ function sendResponse(response: Response, httpError: number, responseBody: any) 
     }
 }
 
-function getId(request: Request, response: Response): any {
+function getId(request: Request): any {
     const id = Number(request.params.id);
     if (isNullOrUndefined(request.params.id) || !Number.isInteger(id)) {
         return null;
@@ -43,7 +43,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.get('/projects/:id', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         if (id === null) {
             sendResponse(response, 400, null);
         }
@@ -54,7 +54,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.put('/projects/:id', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         const open = request.body.open;
         if (id === null || !isBoolean(open)) {
             sendResponse(response, 400, null);
@@ -66,7 +66,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.get('/projects/:id/image', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         if (id === null) {
             sendResponse(response, 400, null);
         }
@@ -83,7 +83,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.put('/projects/:id/image', formidable(), function(request: any, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         if (id === null || isNullOrUndefined(request.files.file)) {
             sendResponse(response, 400, null);
         }
@@ -94,7 +94,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.post('/projects/:id/pledge', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         const pledge = request.body;
         if (id === null || !verifyPledge(pledge)) {
             sendResponse(response, 400, null);
@@ -106,7 +106,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.get('/projects/:id/rewards', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         if (id === null) {
             sendResponse(response, 400, null);
         }
@@ -117,7 +117,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.put('/projects/:id/rewards', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         const rewards = request.body.rewards;
         if (id === null || !isArray(rewards)) {
             sendResponse(response, 400, null);
@@ -125,7 +125,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
         else {
             let valid = true;
             for (let reward of rewards) {
-                if (!verifyReward(rewards))
+                if (!verifyReward(reward))
                     valid = false;
             }
 
@@ -169,7 +169,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.get('/users/:id', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         if (id === null) {
             sendResponse(response, 400, null);
         }
@@ -180,7 +180,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.put('/users/:id', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         const user = request.body;
         if (id === null || !verifyUser(user)) {
             sendResponse(response, 400, null);
@@ -192,7 +192,7 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
     });
 
     app.delete('/users/:id', function(request, response) {
-        const id = getId(request, response);
+        const id = getId(request);
         if (id === null) {
             sendResponse(response, 400, null);
         }
