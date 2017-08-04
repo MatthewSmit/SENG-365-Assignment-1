@@ -2,7 +2,7 @@ import {Express, Request, Response} from "express";
 import formidable = require('express-formidable');
 import {isArray, isBoolean, isNullOrUndefined, isString} from "util";
 
-import {Crowdfunder, verifyPledge, verifyProjectData, verifyReward, verifyUser} from "./crowdfunder";
+import {CrowdFunder, verifyPledge, verifyProjectData, verifyReward, verifyUser} from "./crowdfunder";
 
 function sendResponse(response: Response, httpError: number, responseBody: any) {
     if (isNullOrUndefined(responseBody)) {
@@ -23,12 +23,13 @@ function getId(request: Request): any {
     }
 }
 
-export function setup(app: Express, crowdfunder: Crowdfunder) {
+export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.get('/projects', function(request, response) {
         const startIndex: number = Number(request.query.startIndex) || 0;
         const count: number = Number(request.query.count) || -1;
-        const result = crowdfunder.getProjects(startIndex, count);
-        sendResponse(response, result.httpCode, result.response);
+        crowdfunder.getProjects(startIndex, count, (result) => {
+            sendResponse(response, result.httpCode, result.response);
+        });
     });
 
     app.post('/projects', function(request, response) {
@@ -37,8 +38,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.createProject(project);
-            sendResponse(response, result.httpCode, result.response);
+            crowdfunder.createProject(project, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
         }
     });
 
@@ -48,8 +50,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.getProject(id);
-            sendResponse(response, result.httpCode, result.response);
+            crowdfunder.getProject(id, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
         }
     });
 
@@ -60,8 +63,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.updateProject(id, open);
-            sendResponse(response, result, null);
+            crowdfunder.updateProject(id, open, (result) => {
+                sendResponse(response, result, null);
+            });
         }
     });
 
@@ -71,14 +75,15 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.getImage(id);
-            if (result.httpCode != 200) {
-                sendResponse(response, result.httpCode, null);
-            }
-            else {
-                response.type('png');
-                response.send(result.response);
-            }
+            crowdfunder.getImage(id, (result) => {
+                if (result.httpCode != 200) {
+                    sendResponse(response, result.httpCode, null);
+                }
+                else {
+                    response.type('png');
+                    response.send(result.response);
+                }
+            });
         }
     });
 
@@ -88,8 +93,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.updateImage(id, request.files.file);
-            sendResponse(response, result, null);
+            crowdfunder.updateImage(id, request.files.file, (result) => {
+                sendResponse(response, result, null);
+            });
         }
     });
 
@@ -100,8 +106,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.submitPledge(id, pledge);
-            sendResponse(response, result, null);
+            crowdfunder.submitPledge(id, pledge, (result) => {
+                sendResponse(response, result, null);
+            });
         }
     });
 
@@ -111,8 +118,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.getRewards(id);
-            sendResponse(response, result.httpCode, result.response);
+            crowdfunder.getRewards(id, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
         }
     });
 
@@ -133,8 +141,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
                 sendResponse(response, 400, null);
             }
             else {
-                const result = crowdfunder.updateRewards(id, <[any]>rewards);
-                sendResponse(response, result, null);
+                crowdfunder.updateRewards(id, <[any]>rewards, (result) => {
+                    sendResponse(response, result, null);
+                });
             }
         }
     });
@@ -145,8 +154,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.createUser(user);
-            sendResponse(response, result.httpCode, result.response);
+            crowdfunder.createUser(user, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
         }
     });
 
@@ -158,14 +168,16 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.login(request.query.username, request.query.password);
-            sendResponse(response, result.httpCode, result.response);
+            crowdfunder.login(request.query.username, request.query.password, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
         }
     });
 
     app.post('/users/logout', function(request, response) {
-        const result = crowdfunder.logout();
-        sendResponse(response, result, null);
+        crowdfunder.logout((result) => {
+            sendResponse(response, result, null);
+        });
     });
 
     app.get('/users/:id', function(request, response) {
@@ -174,8 +186,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.getUser(id);
-            sendResponse(response, result.httpCode, result.response);
+            crowdfunder.getUser(id, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
         }
     });
 
@@ -186,8 +199,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.updateUser(id, user);
-            sendResponse(response, result, null);
+            crowdfunder.updateUser(id, user, (result) => {
+                sendResponse(response, result, null);
+            });
         }
     });
 
@@ -197,8 +211,9 @@ export function setup(app: Express, crowdfunder: Crowdfunder) {
             sendResponse(response, 400, null);
         }
         else {
-            const result = crowdfunder.deleteUser(id);
-            sendResponse(response, result, null);
+            crowdfunder.deleteUser(id, (result) => {
+                sendResponse(response, result, null);
+            });
         }
     });
 }

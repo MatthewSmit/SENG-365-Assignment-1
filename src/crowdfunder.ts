@@ -1,6 +1,8 @@
 // Used for the GET - projects/ endpoint. This contains a subset of the project data.
 import {isArray, isBoolean, isString} from "util";
 
+import {DataConnection} from "./dataConnection";
+
 interface ProjectOverview {
     id: number;
     title: string;
@@ -17,7 +19,7 @@ interface Backer {
 interface ProjectDetails {
     project: Project;
     progress: Progress;
-    backers: [Backer];
+    backers: Backer[];
 }
 
 // object containing project, and generated data (creation date, id)
@@ -45,8 +47,8 @@ export interface ProjectData {
     imageUri: string;
     // target amount in cents
     target: number;
-    creators: [Creator];
-    rewards: [Reward];
+    creators: Creator[];
+    rewards: Reward[];
 }
 
 export function verifyProjectData(projectData: any): boolean {
@@ -151,126 +153,224 @@ interface LogInResponse {
 
 interface ApiResponse<T> {
     httpCode: number;
-    response: T;
+    response?: T;
 }
 
-export class Crowdfunder {
-    public getProjects(startIndex: number, count: number): ApiResponse<[ProjectOverview]> {
-        return {
-            httpCode: 200,
-            response: [{id: 0, title: "string", subtitle: "string", imageUri: "string"}]
-        };
+export class CrowdFunder {
+    private dataConnection: DataConnection;
+
+    constructor(dataConnection: DataConnection) {
+        this.dataConnection = dataConnection;
     }
 
-    public createProject(project: ProjectData): ApiResponse<number> {
-        return {
+    public getProjects(startIndex: number, count: number, callback: (result: ApiResponse<ProjectOverview[]>) => void) {
+        this.dataConnection.query("SELECT id, title, subtitle FROM Projects ORDER BY id LIMIT ? OFFSET ?", [count < 0 ? 200 : count, startIndex], (err, rows, fields) => {
+            if (err) {
+                callback({
+                    httpCode: 500
+                });
+            }
+            else {
+                let response: ProjectOverview[] = [];
+                for (let project of rows) {
+                    response.push({
+                        id: project.id,
+                        title: project.title,
+                        subtitle: project.subtitle,
+                        imageUri: '/projects/' + project.id + '/image'
+                    });
+                }
+
+                callback({
+                    httpCode: 200,
+                    response: response
+                });
+            }
+        });
+    }
+
+    public createProject(project: ProjectData, callback: (result: ApiResponse<number>) => void): void {
+        callback({
             httpCode: 200,
             response: 0
-        };
+        });
     }
 
-    public getProject(id: number): ApiResponse<ProjectDetails> {
-        return {
-            httpCode: 200,
-            response: {
-                project: {
-                    id: id,
-                    creationDate: 0,
-                    data: {
-                        title: "string",
-                        subtitle: "string",
-                        description: "string",
-                        imageUri: "string",
-                        target: 0,
-                        creators: [
-                            {
-                                id: 0,
-                                name: "string"
-                            }
-                        ],
-                        rewards: [
-                            {
-                                id: 0,
-                                amount: 0,
-                                description: "string"
-                            }
-                        ]
-                    }
-                },
-                progress: {
-                    target: 0,
-                    currentPledged: 0,
-                    numberOfBackers: 0
-                },
-                backers: [
-                    {
-                        name: 0,
-                        amount: 0
-                    }
-                ]
+    public getProject(id: number, callback: (result: ApiResponse<ProjectDetails>) => void): void {
+        this.dataConnection.query(
+            "SELECT Projects.title, Projects.subtitle, Projects.description, Projects.target, Projects.creationDate, COUNT(Backers.user_id), SUM(Backers.amount) " +
+            "FROM Projects " +
+            "INNER JOIN Backers ON Backers.project_id = Projects.id " +
+            "WHERE id = ?; " +
+
+            "SELECT Users.id, Users.username " +
+            "FROM ProjectCreators " +
+            "INNER JOIN Users ON Users.id = ProjectCreators.user_id " +
+            "WHERE ProjectCreators.project_id = ?; " +
+
+            "SELECT Rewards.id, Rewards.amount, Rewards.description " +
+            "FROM Rewards " +
+            "WHERE Rewards.project_id = ?; " +
+
+            "SELECT Users.id, Users.username, Backers.amount, Backers.private " +
+            "FROM Backers " +
+            "INNER JOIN Users ON Users.id = Backers.user_id " +
+            "WHERE Backers.project_id = ?;",
+
+            [id, id, id, id],
+
+            (err, rows, fields) => {
+            if (err) {
+                callback({
+                    httpCode: 500
+                });
             }
-        };
-    }
-
-    public updateProject(id: number, open: boolean): number {
-        return 200;
-    }
-
-    public getRewards(id: number): ApiResponse<[Reward]> {
-        return {
-            httpCode: 200,
-            response: [
-                {
-                    id: 0,
-                    amount: 0,
-                    description: "string"
+            else {
+                if (rows[0].length == 0) {
+                    callback({
+                        httpCode: 400
+                    });
                 }
-            ]
-        };
+                else {
+                    const projectSql = rows[0][0];
+                    const creatorsSql = rows[1];
+                    const rewardsSql = rows[2];
+                    const backersSql = rows[3];
+
+                    let creators: Creator[] = [];
+                    for (let creator of creatorsSql) {
+                        creators.push({
+                            id: creator.id,
+                            name: creator.username
+                        });
+                    }
+
+                    let rewards: Reward[] = [];
+                    for (let reward of rewardsSql) {
+                        rewards.push({
+                            id: reward.id,
+                            amount: reward.amount,
+                            description: reward.description
+                        });
+                    }
+
+                    let backers: Backer[] = [];
+                    for (let backer of backersSql) {
+                        if (backer.private == 0) {
+                            backers.push({
+                                name: backer.username,
+                                amount: backer.amount
+                            });
+                        }
+                    }
+
+                    callback({
+                        httpCode: 200,
+                        response: {
+                            project: {
+                                id: id,
+                                creationDate: projectSql.creationDate,
+                                data: {
+                                    title: projectSql.title,
+                                    subtitle: projectSql.subtitle,
+                                    description: projectSql.description,
+                                    imageUri: '/projects/' + id + '/image',
+                                    target: projectSql.target,
+                                    creators: creators,
+                                    rewards: rewards
+                                }
+                            },
+                            progress: {
+                                target: projectSql.target,
+                                currentPledged: projectSql["SUM(Backers.amount)"],
+                                numberOfBackers: projectSql["COUNT(Backers.user_id)"]
+                            },
+                            backers: backers
+                        }
+                    });
+                }
+            }
+        });
     }
 
-    public updateRewards(id: number, rewards: [Reward]): number {
-        return 200;
+    public updateProject(id: number, open: boolean, callback: (result: number) => void): void {
+        callback(200);
     }
 
-    public getImage(id: number): ApiResponse<Buffer> {
-        return {
+    public getRewards(id: number, callback: (result: ApiResponse<Reward[]>) => void): void {
+        this.dataConnection.query(
+            "SELECT Rewards.id, Rewards.amount, Rewards.description " +
+            "FROM Rewards " +
+            "WHERE Rewards.project_id = ?",
+
+            [id, id, id, id],
+
+            (err, rows, fields) => {
+                if (err) {
+                    callback({
+                        httpCode: 500
+                    });
+                }
+                else {
+                    let rewards: Reward[] = [];
+                    for (let reward of rows) {
+                        rewards.push({
+                            id: reward.id,
+                            amount: reward.amount,
+                            description: reward.description
+                        });
+                    }
+
+                    callback({
+                        httpCode: 200,
+                        response: rewards
+                    });
+                }
+            });
+    }
+
+    public updateRewards(id: number, rewards: [Reward], callback: (result: number) => void): void {
+        callback(200);
+    }
+
+    public getImage(id: number, callback: (result: ApiResponse<Buffer>) => void): void {
+        callback({
             httpCode: 200,
             response: new Buffer(0)
-        }
+        });
     }
 
-    public updateImage(id: number, image: any): number {
-        return 200;
+    public updateImage(id: number, image: any, callback: (result: number) => void): void {
+        callback(200);
     }
 
-    public submitPledge(id: number, pledge: Pledge): number {
-        return 200;
+    public submitPledge(id: number, pledge: Pledge, callback: (result: number) => void): void {
+        callback(200);
     }
 
-    public createUser(user: User): ApiResponse<number> {
-        return {
+    public createUser(user: User, callback: (result: ApiResponse<number>) => void): void {
+        callback({
             httpCode: 200,
             response: 0
-        };
+        });
     }
 
-    public login(username: string, password: string): ApiResponse<LogInResponse> {
-        return {
+    public login(username: string, password: string, callback: (result: ApiResponse<LogInResponse>) => void): void {
+        callback({
             httpCode: 200,
             response: {
                 id: 0,
                 token: "string"
             }
-        };
+        });
     }
 
-    public logout(): number {
-        return 200;
+    public logout(callback: (result: number) => void) {
+        callback(200);
     }
 
-    public getUser(id: number): ApiResponse<PublicUser> {
-        return {
+    public getUser(id: number, callback: (result: ApiResponse<PublicUser>) => void): void {
+        callback({
             httpCode: 200,
             response: {
                 id: 0,
@@ -278,14 +378,14 @@ export class Crowdfunder {
                 location: "string",
                 email: "string"
             }
-        };
+        });
     }
 
-    public updateUser(id: number, user: User): number {
-        return 200;
+    public updateUser(id: number, user: User, callback: (result: number) => void): void {
+        callback(200);
     }
 
-    public deleteUser(id: number): number {
-        return 200;
+    public deleteUser(id: number, callback: (result: number) => void): void {
+        callback(200);
     }
 }

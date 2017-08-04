@@ -9,7 +9,6 @@
         "outDir": "lib",
         "preserveConstEnums": true,
         "sourceMap": true,
-        "strictNullChecks": true,
         "target": "es2016"
     },
     "include": [
