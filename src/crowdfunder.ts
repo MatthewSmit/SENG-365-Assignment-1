@@ -1,8 +1,11 @@
-// Used for the GET - projects/ endpoint. This contains a subset of the project data.
+import jwt = require('jsonwebtoken');
+
 import {isArray, isBoolean, isString} from "util";
 
+import config = require('./config');
 import {DataConnection} from "./dataConnection";
 
+// Used for the GET - projects/ endpoint. This contains a subset of the project data.
 interface ProjectOverview {
     id: number;
     title: string;
@@ -153,6 +156,7 @@ interface LogInResponse {
 
 interface ApiResponse<T> {
     httpCode: number;
+    type?: string,
     response?: T;
 }
 
@@ -164,13 +168,18 @@ export class CrowdFunder {
     }
 
     public getProjects(startIndex: number, count: number, callback: (result: ApiResponse<ProjectOverview[]>) => void) {
-        this.dataConnection.query("SELECT id, title, subtitle FROM Projects ORDER BY id LIMIT ? OFFSET ?", [count < 0 ? 200 : count, startIndex], (err, rows, fields) => {
+        // Get data from Projects table
+        this.dataConnection.query("SELECT id, title, subtitle FROM Projects ORDER BY id LIMIT ? OFFSET ?",
+            [count < 0 ? 200 : count, startIndex],
+            (err, rows, fields) => {
+            // 500 error if SQL issue
             if (err) {
                 callback({
                     httpCode: 500
                 });
             }
             else {
+                // Convert from SQL row to ProjectOverview[]
                 let response: ProjectOverview[] = [];
                 for (let project of rows) {
                     response.push({
@@ -181,6 +190,7 @@ export class CrowdFunder {
                     });
                 }
 
+                // Return response
                 callback({
                     httpCode: 200,
                     response: response
@@ -197,21 +207,26 @@ export class CrowdFunder {
     }
 
     public getProject(id: number, callback: (result: ApiResponse<ProjectDetails>) => void): void {
+        // Multiple queries because we need a lot of data
         this.dataConnection.query(
+            // Get project information, including number of backers and sum of backer amount
             "SELECT Projects.title, Projects.subtitle, Projects.description, Projects.target, Projects.creationDate, COUNT(Backers.user_id), SUM(Backers.amount) " +
             "FROM Projects " +
             "INNER JOIN Backers ON Backers.project_id = Projects.id " +
             "WHERE id = ?; " +
 
+            // Get id, username of the project creators
             "SELECT Users.id, Users.username " +
             "FROM ProjectCreators " +
             "INNER JOIN Users ON Users.id = ProjectCreators.user_id " +
             "WHERE ProjectCreators.project_id = ?; " +
 
+            // Get reward descriptions
             "SELECT Rewards.id, Rewards.amount, Rewards.description " +
             "FROM Rewards " +
             "WHERE Rewards.project_id = ?; " +
 
+            // Get all backers for the project
             "SELECT Users.id, Users.username, Backers.amount, Backers.private " +
             "FROM Backers " +
             "INNER JOIN Users ON Users.id = Backers.user_id " +
@@ -221,17 +236,20 @@ export class CrowdFunder {
 
             (err, rows, fields) => {
             if (err) {
+                // 500 error if SQL error
                 callback({
                     httpCode: 500
                 });
             }
             else {
+                // 400 error if project id doesn't exist
                 if (rows[0].length == 0) {
                     callback({
                         httpCode: 400
                     });
                 }
                 else {
+                    // Convert from sql data to json data
                     const projectSql = rows[0][0];
                     const creatorsSql = rows[1];
                     const rewardsSql = rows[2];
@@ -264,17 +282,18 @@ export class CrowdFunder {
                         }
                     }
 
+                    // Return response
                     callback({
                         httpCode: 200,
                         response: {
                             project: {
                                 id: id,
-                                creationDate: projectSql.creationDate,
+                                creationDate: projectSql.creationDate.getTime(),
                                 data: {
                                     title: projectSql.title,
                                     subtitle: projectSql.subtitle,
                                     description: projectSql.description,
-                                    imageUri: '/projects/' + id + '/image',
+                                    imageUri: `/projects/${id}/image`,
                                     target: projectSql.target,
                                     creators: creators,
                                     rewards: rewards
@@ -298,20 +317,23 @@ export class CrowdFunder {
     }
 
     public getRewards(id: number, callback: (result: ApiResponse<Reward[]>) => void): void {
+        // Get all reward data for a project
         this.dataConnection.query(
             "SELECT Rewards.id, Rewards.amount, Rewards.description " +
             "FROM Rewards " +
             "WHERE Rewards.project_id = ?",
 
-            [id, id, id, id],
+            [id],
 
             (err, rows, fields) => {
                 if (err) {
+                    // Return 500 Error if SQL error
                     callback({
                         httpCode: 500
                     });
                 }
                 else {
+                    // Convert from SQL format to JSON format
                     let rewards: Reward[] = [];
                     for (let reward of rows) {
                         rewards.push({
@@ -321,6 +343,7 @@ export class CrowdFunder {
                         });
                     }
 
+                    // Return response
                     callback({
                         httpCode: 200,
                         response: rewards
@@ -334,10 +357,44 @@ export class CrowdFunder {
     }
 
     public getImage(id: number, callback: (result: ApiResponse<Buffer>) => void): void {
-        callback({
-            httpCode: 200,
-            response: new Buffer(0)
-        });
+        this.dataConnection.query("SELECT imageData FROM Projects WHERE id=?",
+            [id],
+            (err, rows, fields) => {
+                if (err) {
+                    // Return 500 if SQL Error
+                    callback({
+                        httpCode: 500
+                    });
+                }
+                else if (rows.length == 0) {
+                    // Return 400 if project not found
+                    callback({
+                        httpCode: 400
+                    });
+                }
+                else {
+                    // stored in the database as data:image/png;base64,BASE64 PNG DATA
+                    let image = rows[0].imageData;
+                    let match = image.match(/^data:([^,;]+);base64,(.+)$/);
+                    if (match === null) {
+                        // 500 if unable to extract data from image. This shouldn't happen.
+                        console.log(`Regex for getting image for project id: ${id} has failed`);
+                        callback({
+                            httpCode: 500
+                        });
+                    }
+                    else {
+                        // Return the image
+                        let type =  match[1];
+                        let data = match[2];
+                        callback({
+                            httpCode: 200,
+                            type: type,
+                            response: new Buffer(data, "base64")
+                        });
+                    }
+                }
+            });
     }
 
     public updateImage(id: number, image: any, callback: (result: number) => void): void {
@@ -356,13 +413,55 @@ export class CrowdFunder {
     }
 
     public login(username: string, password: string, callback: (result: ApiResponse<LogInResponse>) => void): void {
-        callback({
-            httpCode: 200,
-            response: {
-                id: 0,
-                token: "string"
-            }
-        });
+        this.dataConnection.query("SELECT id, password FROM Users WHERE username=?",
+            [username],
+            (err, rows) => {
+                if (err) {
+                    callback({
+                        httpCode: 500
+                    });
+                }
+                // 400 error if username doesn't match 1 user. (We should prevent it from matching more then 1 user in both SQL and createUser)
+                else if (rows.length != 1) {
+                    callback({
+                        httpCode: 400
+                    });
+                }
+                else {
+                    // Return 400 if password is wrong
+                    //TODO: Should this hash the password or does the client do that?
+                    const user = rows[0];
+                    if (user.password != password) {
+                        callback({
+                            httpCode: 400
+                        });
+                    }
+                    else {
+                        // Generate token for user
+                        const id = Number(user.id);
+                        jwt.sign(<object>{
+                            id: id
+                        }, config.tokenSecret, { expiresIn: "30d" }, function(err, token) {
+                            if (err) {
+                                console.log("Error when generating login token:");
+                                console.log(err);
+                                callback({
+                                    httpCode: 500
+                                });
+                            }
+                            else {
+                                callback({
+                                    httpCode: 200,
+                                    response: {
+                                        id: id,
+                                        token: token
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+            });
     }
 
     public logout(callback: (result: number) => void) {
@@ -370,15 +469,35 @@ export class CrowdFunder {
     }
 
     public getUser(id: number, callback: (result: ApiResponse<PublicUser>) => void): void {
-        callback({
-            httpCode: 200,
-            response: {
-                id: 0,
-                username: "string",
-                location: "string",
-                email: "string"
-            }
-        });
+        this.dataConnection.query(
+            "SELECT username, email, location FROM Users WHERE id=?",
+            [id],
+            (err, rows, fields) => {
+                if (err) {
+                    callback({
+                        httpCode: 500
+                    });
+                }
+                else {
+                    if (rows.length == 0) {
+                        callback({
+                            httpCode: 400
+                        });
+                    }
+                    else {
+                        const user = rows[0];
+                        callback({
+                            httpCode: 200,
+                            response: {
+                                id: id,
+                                username: user.username,
+                                location: user.location,
+                                email: user.email
+                            }
+                        });
+                    }
+                }
+            });
     }
 
     public updateUser(id: number, user: User, callback: (result: number) => void): void {

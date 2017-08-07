@@ -7,7 +7,8 @@ const config = {
         password: 'secret',
         database: 'crowdfunder',
         multipleStatements: true
-    }
+    },
+    tokenSecret: "LhC1lSHg7aX1JqvoqlxJm8qJlxg5QUnz"
 };
 
 export = config;
