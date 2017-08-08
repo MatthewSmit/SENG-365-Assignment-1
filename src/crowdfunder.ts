@@ -1,9 +1,7 @@
-import jwt = require('jsonwebtoken');
-
 import {isArray, isBoolean, isString} from "util";
 
-import config = require('./config');
 import {DataConnection} from "./dataConnection";
+import {createToken, TokenData} from "./token";
 
 // Used for the GET - projects/ endpoint. This contains a subset of the project data.
 interface ProjectOverview {
@@ -171,7 +169,7 @@ export class CrowdFunder {
         // Get data from Projects table
         this.dataConnection.query("SELECT id, title, subtitle FROM Projects ORDER BY id LIMIT ? OFFSET ?",
             [count < 0 ? 200 : count, startIndex],
-            (err, rows, fields) => {
+            (err, rows) => {
             // 500 error if SQL issue
             if (err) {
                 callback({
@@ -186,7 +184,7 @@ export class CrowdFunder {
                         id: project.id,
                         title: project.title,
                         subtitle: project.subtitle,
-                        imageUri: '/projects/' + project.id + '/image'
+                        imageUri: '/api/v1/projects/' + project.id + '/image'
                     });
                 }
 
@@ -234,7 +232,7 @@ export class CrowdFunder {
 
             [id, id, id, id],
 
-            (err, rows, fields) => {
+            (err, rows) => {
             if (err) {
                 // 500 error if SQL error
                 callback({
@@ -242,10 +240,10 @@ export class CrowdFunder {
                 });
             }
             else {
-                // 400 error if project id doesn't exist
+                // 404 error if project id doesn't exist
                 if (rows[0].length == 0) {
                     callback({
-                        httpCode: 400
+                        httpCode: 404
                     });
                 }
                 else {
@@ -293,7 +291,7 @@ export class CrowdFunder {
                                     title: projectSql.title,
                                     subtitle: projectSql.subtitle,
                                     description: projectSql.description,
-                                    imageUri: `/projects/${id}/image`,
+                                    imageUri: `/api/v1/projects/${id}/image`,
                                     target: projectSql.target,
                                     creators: creators,
                                     rewards: rewards
@@ -325,7 +323,7 @@ export class CrowdFunder {
 
             [id],
 
-            (err, rows, fields) => {
+            (err, rows) => {
                 if (err) {
                     // Return 500 Error if SQL error
                     callback({
@@ -359,7 +357,7 @@ export class CrowdFunder {
     public getImage(id: number, callback: (result: ApiResponse<Buffer>) => void): void {
         this.dataConnection.query("SELECT imageData FROM Projects WHERE id=?",
             [id],
-            (err, rows, fields) => {
+            (err, rows) => {
                 if (err) {
                     // Return 500 if SQL Error
                     callback({
@@ -367,9 +365,9 @@ export class CrowdFunder {
                     });
                 }
                 else if (rows.length == 0) {
-                    // Return 400 if project not found
+                    // Return 404 if project not found
                     callback({
-                        httpCode: 400
+                        httpCode: 404
                     });
                 }
                 else {
@@ -439,26 +437,26 @@ export class CrowdFunder {
                     else {
                         // Generate token for user
                         const id = Number(user.id);
-                        jwt.sign(<object>{
-                            id: id
-                        }, config.tokenSecret, { expiresIn: "30d" }, function(err, token) {
-                            if (err) {
-                                console.log("Error when generating login token:");
-                                console.log(err);
-                                callback({
-                                    httpCode: 500
-                                });
-                            }
-                            else {
-                                callback({
-                                    httpCode: 200,
-                                    response: {
-                                        id: id,
-                                        token: token
-                                    }
-                                });
-                            }
-                        });
+                        let token: string = null;
+                        try {
+                            token = createToken(id);
+                        }
+                        catch (error) {
+                            console.log("Error when generating login token:");
+                            console.log(err);
+                            callback({
+                                httpCode: 500
+                            });
+                        }
+                        if (token !== null) {
+                            callback({
+                                httpCode: 200,
+                                response: {
+                                    id: id,
+                                    token: token
+                                }
+                            });
+                        }
                     }
                 }
             });
@@ -472,7 +470,7 @@ export class CrowdFunder {
         this.dataConnection.query(
             "SELECT username, email, location FROM Users WHERE id=?",
             [id],
-            (err, rows, fields) => {
+            (err, rows) => {
                 if (err) {
                     callback({
                         httpCode: 500
@@ -481,7 +479,7 @@ export class CrowdFunder {
                 else {
                     if (rows.length == 0) {
                         callback({
-                            httpCode: 400
+                            httpCode: 404
                         });
                     }
                     else {
@@ -495,6 +493,44 @@ export class CrowdFunder {
                                 email: user.email
                             }
                         });
+                    }
+                }
+            });
+    }
+
+    public getLoginStatus(token: TokenData, callback: (result: ApiResponse<boolean>) => void): void {
+        const id = token.id;
+        this.dataConnection.query(
+            "SELECT logoutTime FROM Users WHERE id=?",
+            [id],
+            (err, rows) => {
+                if (err) {
+                    callback({
+                        httpCode: 500
+                    });
+                }
+                else {
+                    if (rows.length == 0) {
+                        callback({
+                            httpCode: 200,
+                            response: false
+                        });
+                    }
+                    else {
+                        const user = rows[0];
+                        const logoutTime: Date = user.logoutTime;
+                        if (logoutTime >= token.issuedAt) {
+                            callback({
+                                httpCode: 200,
+                                response: false
+                            });
+                        }
+                        else {
+                            callback({
+                                httpCode: 200,
+                                response: true
+                            });
+                        }
                     }
                 }
             });

@@ -3,6 +3,7 @@ import formidable = require('express-formidable');
 import {isArray, isBoolean, isNullOrUndefined, isString} from "util";
 
 import {CrowdFunder, verifyPledge, verifyProjectData, verifyReward, verifyUser} from "./crowdfunder";
+import {verifyToken} from "./token";
 
 function sendResponse(response: Response, httpError: number, responseBody: any) {
     if (isNullOrUndefined(responseBody)) {
@@ -13,7 +14,7 @@ function sendResponse(response: Response, httpError: number, responseBody: any) 
     }
 }
 
-function getId(request: Request): any {
+function getId(request: Request): number {
     const id = Number(request.params.id);
     if (isNullOrUndefined(request.params.id) || !Number.isInteger(id)) {
         return null;
@@ -23,11 +24,19 @@ function getId(request: Request): any {
     }
 }
 
-export function setup(app: Express, crowdfunder: CrowdFunder) {
+function getToken(request: Request): any {
+    const tokenString = request.headers["x-authorization"];
+    if (tokenString === null || Array.isArray(tokenString))
+        return null;
+
+    return verifyToken(tokenString);
+}
+
+export function setup(app: Express, crowdFunder: CrowdFunder) {
     app.get('/api/v1/projects', function(request, response) {
         const startIndex: number = Number(request.query.startIndex) || 0;
         const count: number = Number(request.query.count) || -1;
-        crowdfunder.getProjects(startIndex, count, (result) => {
+        crowdFunder.getProjects(startIndex, count, (result) => {
             sendResponse(response, result.httpCode, result.response);
         });
     });
@@ -38,7 +47,7 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.createProject(project, (result) => {
+            crowdFunder.createProject(project, (result) => {
                 sendResponse(response, result.httpCode, result.response);
             });
         }
@@ -47,10 +56,10 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.get('/api/v1/projects/:id', function(request, response) {
         const id = getId(request);
         if (id === null) {
-            sendResponse(response, 400, null);
+            sendResponse(response, 404, null);
         }
         else {
-            crowdfunder.getProject(id, (result) => {
+            crowdFunder.getProject(id, (result) => {
                 sendResponse(response, result.httpCode, result.response);
             });
         }
@@ -59,11 +68,14 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.put('/api/v1/projects/:id', function(request, response) {
         const id = getId(request);
         const open = request.body.open;
-        if (id === null || !isBoolean(open)) {
+        if (id === null) {
+            sendResponse(response, 404, null);
+        }
+        else if (!isBoolean(open)) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.updateProject(id, open, (result) => {
+            crowdFunder.updateProject(id, open, (result) => {
                 sendResponse(response, result, null);
             });
         }
@@ -72,10 +84,10 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.get('/api/v1/projects/:id/image', function(request, response) {
         const id = getId(request);
         if (id === null) {
-            sendResponse(response, 400, null);
+            sendResponse(response, 404, null);
         }
         else {
-            crowdfunder.getImage(id, (result) => {
+            crowdFunder.getImage(id, (result) => {
                 if (result.httpCode != 200) {
                     sendResponse(response, result.httpCode, null);
                 }
@@ -89,11 +101,14 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
 
     app.put('/api/v1/projects/:id/image', formidable(), function(request: any, response) {
         const id = getId(request);
-        if (id === null || isNullOrUndefined(request.files.file)) {
+        if (id === null) {
+            sendResponse(response, 404, null);
+        }
+        else if (isNullOrUndefined(request.files.file)) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.updateImage(id, request.files.file, (result) => {
+            crowdFunder.updateImage(id, request.files.file, (result) => {
                 sendResponse(response, result, null);
             });
         }
@@ -102,11 +117,14 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.post('/api/v1/projects/:id/pledge', function(request, response) {
         const id = getId(request);
         const pledge = request.body;
-        if (id === null || !verifyPledge(pledge)) {
+        if (id === null) {
+            sendResponse(response, 404, null);
+        }
+        else if (!verifyPledge(pledge)) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.submitPledge(id, pledge, (result) => {
+            crowdFunder.submitPledge(id, pledge, (result) => {
                 sendResponse(response, result, null);
             });
         }
@@ -115,10 +133,10 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.get('/api/v1/projects/:id/rewards', function(request, response) {
         const id = getId(request);
         if (id === null) {
-            sendResponse(response, 400, null);
+            sendResponse(response, 404, null);
         }
         else {
-            crowdfunder.getRewards(id, (result) => {
+            crowdFunder.getRewards(id, (result) => {
                 sendResponse(response, result.httpCode, result.response);
             });
         }
@@ -127,7 +145,10 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.put('/api/v1/projects/:id/rewards', function(request, response) {
         const id = getId(request);
         const rewards = request.body.rewards;
-        if (id === null || !isArray(rewards)) {
+        if (id === null) {
+            sendResponse(response, 404, null);
+        }
+        else if (!isArray(rewards)) {
             sendResponse(response, 400, null);
         }
         else {
@@ -141,7 +162,7 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
                 sendResponse(response, 400, null);
             }
             else {
-                crowdfunder.updateRewards(id, <[any]>rewards, (result) => {
+                crowdFunder.updateRewards(id, <[any]>rewards, (result) => {
                     sendResponse(response, result, null);
                 });
             }
@@ -154,7 +175,7 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.createUser(user, (result) => {
+            crowdFunder.createUser(user, (result) => {
                 sendResponse(response, result.httpCode, result.response);
             });
         }
@@ -168,25 +189,37 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.login(request.query.username, request.query.password, (result) => {
+            crowdFunder.login(request.query.username, request.query.password, (result) => {
                 sendResponse(response, result.httpCode, result.response);
             });
         }
     });
 
     app.post('/api/v1/users/logout', function(request, response) {
-        crowdfunder.logout((result) => {
+        crowdFunder.logout((result) => {
             sendResponse(response, result, null);
         });
+    });
+
+    app.get('/api/v1/users/login_status', function(request, response) {
+        const token = getToken(request);
+        if (token === null) {
+            sendResponse(response, 200, false);
+        }
+        else {
+            crowdFunder.getLoginStatus(token, (result) => {
+                sendResponse(response, result.httpCode, result.response);
+            });
+        }
     });
 
     app.get('/api/v1/users/:id', function(request, response) {
         const id = getId(request);
         if (id === null) {
-            sendResponse(response, 400, null);
+            sendResponse(response, 404, null);
         }
         else {
-            crowdfunder.getUser(id, (result) => {
+            crowdFunder.getUser(id, (result) => {
                 sendResponse(response, result.httpCode, result.response);
             });
         }
@@ -195,11 +228,14 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.put('/api/v1/users/:id', function(request, response) {
         const id = getId(request);
         const user = request.body;
-        if (id === null || !verifyUser(user)) {
+        if (id === null) {
+            sendResponse(response, 404, null);
+        }
+        else if (!verifyUser(user)) {
             sendResponse(response, 400, null);
         }
         else {
-            crowdfunder.updateUser(id, user, (result) => {
+            crowdFunder.updateUser(id, user, (result) => {
                 sendResponse(response, result, null);
             });
         }
@@ -208,10 +244,10 @@ export function setup(app: Express, crowdfunder: CrowdFunder) {
     app.delete('/api/v1/users/:id', function(request, response) {
         const id = getId(request);
         if (id === null) {
-            sendResponse(response, 400, null);
+            sendResponse(response, 404, null);
         }
         else {
-            crowdfunder.deleteUser(id, (result) => {
+            crowdFunder.deleteUser(id, (result) => {
                 sendResponse(response, result, null);
             });
         }

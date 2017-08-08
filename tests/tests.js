@@ -47,13 +47,75 @@ function testJson(test, url, callback) {
         response.on('end', () => {
             const parsedData = JSON.parse(rawData);
             callback(parsedData);
-            test.done();
         });
-    }).on('error', (e) => {
+    }).on('error', e => {
         test.fail();
         test.done();
     });
 }
+
+function testImage(test, url, callback) {
+    http.get(basePath + url, response => {
+        const statusCode = response.statusCode;
+        test.equal(statusCode, 200);
+
+        const contentType = response.headers['content-type'];
+        test.ok(/^image\/png/.test(contentType) ||
+                /^image\/jpeg/.test(contentType));
+
+        let rawData = '';
+        response.on('data', chunk => { rawData += chunk; });
+        response.on('end', () => {
+            callback(rawData);
+        });
+    }).on('error', e => {
+        test.fail();
+        test.done();
+    });
+}
+
+function testHttp(test, url, expectedStatusCode, callback) {
+    http.get(basePath + url, response => {
+        const statusCode = response.statusCode;
+        test.equal(statusCode, expectedStatusCode);
+        callback();
+    }).on('error', e => {
+        test.fail();
+        test.done();
+    });
+}
+
+function equals(lhs, rhs) {
+    if (!Array.isArray(lhs))
+        throw new Error();
+    if (!Array.isArray(rhs))
+        throw new Error();
+
+    if (lhs.length !== rhs.length)
+        return false;
+
+    for (let i in lhs) {
+        let lhsValue = lhs[i];
+        let rhsValue = rhs[i];
+
+        if (!isObject(lhsValue))
+            return false;
+        if (!isObject(rhsValue))
+            return false;
+
+        if (lhsValue.id !== rhsValue.id)
+            return false;
+        if (lhsValue.title !== rhsValue.title)
+            return false;
+        if (lhsValue.subtitle !== rhsValue.subtitle)
+            return false;
+        if (lhsValue.imageUri !== rhsValue.imageUri)
+            return false;
+    }
+
+    return true;
+}
+
 
 exports.testProjects = function(test) {
     testJson(test, "projects", json => {
@@ -67,12 +129,27 @@ exports.testProjects = function(test) {
             test.ok(objectHasString(value, "subtitle"));
             test.ok(objectHasString(value, "imageUri"));
         }
+
+        test.done();
     });
 };
 
 exports.testProjectsAdvanced = function(test) {
-    test.fail();
-    test.done();
+    testJson(test, "projects", json => {
+
+        testJson(test, "projects?startIndex=1&count=4", function(smallJson) {
+            test.ok(equals(smallJson, json.slice(1, 5)));
+
+            testJson(test, "projects?startIndex=15&count=1", function(smallJson) {
+                test.ok(equals(smallJson, json.slice(15, 16)));
+
+                testJson(test, "projects?startIndex=1000000000&count=1", function(smallJson) {
+                    test.ok(smallJson.length === 0);
+                    test.done();
+                });
+            });
+        });
+    });
 };
 
 exports.testProjectsCreate = function(test) {
@@ -128,6 +205,10 @@ exports.testProjectsId = function(test) {
             test.ok(objectHasString(backer, "name"));
             test.ok(objectHasInteger(backer, "amount"));
         }
+
+        testHttp(test, "projects/ham", 404, function() {
+            test.done();
+        });
     });
 };
 
@@ -137,8 +218,9 @@ exports.testProjectsModify = function(test) {
 };
 
 exports.testProjectsImage = function(test) {
-    test.fail();
-    test.done();
+    testImage(test, "projects/1/image", function() {
+        test.done();
+    });
 };
 
 exports.testProjectsModifyImage = function(test) {
@@ -152,8 +234,19 @@ exports.testProjectsSubmitPledge = function(test) {
 };
 
 exports.testProjectsGetRewards = function(test) {
-    test.fail();
-    test.done();
+    testJson(test, "projects/1/rewards", function(json) {
+        test.ok(Array.isArray(json));
+
+        for (let reward of json) {
+            test.ok(isObject(reward));
+
+            test.ok(objectHasInteger(reward, "id"));
+            test.ok(objectHasInteger(reward, "amount"));
+            test.ok(objectHasString(reward, "description"));
+        }
+
+        test.done();
+    });
 };
 
 exports.testProjectsPutRewards = function(test) {
@@ -172,8 +265,18 @@ exports.testUsersLoginLogout = function(test) {
 };
 
 exports.testUsersGet = function(test) {
-    test.fail();
-    test.done();
+    // Assume 1 is always a valid id
+    testJson(test, "users/1", json => {
+        test.ok(isObject(json));
+        test.ok(objectHasInteger(json, "id"));
+        test.ok(objectHasString(json, "username"));
+        test.ok(objectHasString(json, "location"));
+        test.ok(objectHasString(json, "email"));
+
+        testHttp(test, "users/ham", 404, function() {
+            test.done();
+        });
+    });
 };
 
 exports.testUsersUpdate = function(test) {
