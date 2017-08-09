@@ -41,9 +41,15 @@ export = function(dataConnection: DataConnection): Router {
 
     router.route('/users/logout')
         .post((request, response) => {
-            users.logout((result) => {
-                sendResponse(response, result, null);
-            });
+            const token = getToken(request);
+            if (token === null) {
+                sendResponse(response, 401, null);
+            }
+            else {
+                users.logout(token, (result) => {
+                    sendResponse(response, result, null);
+                });
+            }
         });
 
     router.route('/users/login_status')

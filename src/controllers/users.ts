@@ -67,8 +67,18 @@ export function login(username: string, password: string, callback: (result: Api
     });
 }
 
-export function logout(callback: (result: number) => void) {
-    callback(200);
+export function logout(token: TokenData, callback: (result: number) => void) {
+    const id = token.id;
+    dataConnection.query("UPDATE Users SET logoutTime=NOW() WHERE id=?",
+        [id],
+        (err, rows) => {
+            if (err) {
+                callback(500);
+            }
+            else {
+                callback(200);
+            }
+        });
 }
 
 export function getUser(id: number, callback: (result: ApiResponse<PublicUser>) => void): void {
@@ -142,9 +152,9 @@ export function getLoginStatus(token: TokenData, callback: (result: ApiResponse<
 }
 
 export function updateUser(id: number, user: User, callback: (result: number) => void): void {
-    callback(200);
+    callback(500);
 }
 
 export function deleteUser(id: number, callback: (result: number) => void): void {
-    callback(200);
+    callback(500);
 }

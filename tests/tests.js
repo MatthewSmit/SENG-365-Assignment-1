@@ -1,5 +1,8 @@
 const http = require('http');
-const basePath = "http://localhost:4941/api/v1/";
+const protocol = "http:";
+const hostname = "localhost";
+const port = 4941;
+const apiPath = "/api/v1/";
 
 function isObject(value) {
     return typeof value === "object" && value !== null;
@@ -33,8 +36,48 @@ function objectHasArray(object, field) {
     return Array.isArray(object[field]);
 }
 
-function testJson(test, url, callback) {
-    http.get(basePath + url, response => {
+function extractData(response, callback) {
+    let rawData = '';
+    response.on('data', chunk => { rawData += chunk; });
+    response.on('end', () => {
+        callback(rawData);
+    });
+}
+
+function testGet(test, url, headers, callback) {
+    http.request({
+        protocol: protocol,
+        hostname: hostname,
+        port: port,
+        path: apiPath + url,
+        method: "GET",
+        headers: headers
+    }, response => {
+        callback(response);
+    }).on('error', e => {
+        test.fail();
+        test.done();
+    }).end();
+}
+
+function testPost(test, url, headers, callback) {
+    http.request({
+        protocol: protocol,
+        hostname: hostname,
+        port: port,
+        path: apiPath + url,
+        method: "POST",
+        headers: headers
+    }, response => {
+        callback(response);
+    }).on('error', e => {
+        test.fail();
+        test.done();
+    }).end();
+}
+
+function testJson(test, url, headers, callback) {
+    testGet(test, url, headers, response => {
         const statusCode = response.statusCode;
         test.equal(statusCode, 200);
 
@@ -42,46 +85,30 @@ function testJson(test, url, callback) {
         test.ok(/^application\/json/.test(contentType));
 
         response.setEncoding('utf8');
-        let rawData = '';
-        response.on('data', chunk => { rawData += chunk; });
-        response.on('end', () => {
-            const parsedData = JSON.parse(rawData);
-            callback(parsedData);
+        extractData(response, data => {
+            callback(JSON.parse(data));
         });
-    }).on('error', e => {
-        test.fail();
-        test.done();
     });
 }
 
-function testImage(test, url, callback) {
-    http.get(basePath + url, response => {
+function testImage(test, url, headers, callback) {
+    testGet(test, url, headers, response => {
         const statusCode = response.statusCode;
         test.equal(statusCode, 200);
 
         const contentType = response.headers['content-type'];
         test.ok(/^image\/png/.test(contentType) ||
-                /^image\/jpeg/.test(contentType));
+            /^image\/jpeg/.test(contentType));
 
-        let rawData = '';
-        response.on('data', chunk => { rawData += chunk; });
-        response.on('end', () => {
-            callback(rawData);
-        });
-    }).on('error', e => {
-        test.fail();
-        test.done();
+        extractData(response, callback);
     });
 }
 
-function testHttp(test, url, expectedStatusCode, callback) {
-    http.get(basePath + url, response => {
+function testHttp(test, url, headers, expectedStatusCode, callback) {
+    testGet(test, url, headers, response => {
         const statusCode = response.statusCode;
         test.equal(statusCode, expectedStatusCode);
         callback();
-    }).on('error', e => {
-        test.fail();
-        test.done();
     });
 }
 
@@ -118,7 +145,7 @@ function equals(lhs, rhs) {
 
 
 exports.testProjects = function(test) {
-    testJson(test, "projects", json => {
+    testJson(test, "projects", {}, json => {
         test.ok(Array.isArray(json));
 
         for (let value of json) {
@@ -135,15 +162,15 @@ exports.testProjects = function(test) {
 };
 
 exports.testProjectsAdvanced = function(test) {
-    testJson(test, "projects", json => {
+    testJson(test, "projects", {}, json => {
 
-        testJson(test, "projects?startIndex=1&count=4", function(smallJson) {
+        testJson(test, "projects?startIndex=1&count=4", {}, function(smallJson) {
             test.ok(equals(smallJson, json.slice(1, 5)));
 
-            testJson(test, "projects?startIndex=15&count=1", function(smallJson) {
+            testJson(test, "projects?startIndex=15&count=1", {}, function(smallJson) {
                 test.ok(equals(smallJson, json.slice(15, 16)));
 
-                testJson(test, "projects?startIndex=1000000000&count=1", function(smallJson) {
+                testJson(test, "projects?startIndex=1000000000&count=1", {}, function(smallJson) {
                     test.ok(smallJson.length === 0);
                     test.done();
                 });
@@ -159,7 +186,7 @@ exports.testProjectsCreate = function(test) {
 
 exports.testProjectsId = function(test) {
     // Assume 1 is always a valid id
-    testJson(test, "projects/1", json => {
+    testJson(test, "projects/1", {}, json => {
         test.ok(isObject(json));
         test.ok(objectHasObject(json, "project"));
         test.ok(objectHasObject(json, "progress"));
@@ -206,7 +233,7 @@ exports.testProjectsId = function(test) {
             test.ok(objectHasInteger(backer, "amount"));
         }
 
-        testHttp(test, "projects/ham", 404, function() {
+        testHttp(test, "projects/ham", {}, 404, function() {
             test.done();
         });
     });
@@ -218,7 +245,7 @@ exports.testProjectsModify = function(test) {
 };
 
 exports.testProjectsImage = function(test) {
-    testImage(test, "projects/1/image", function() {
+    testImage(test, "projects/1/image", {}, function() {
         test.done();
     });
 };
@@ -234,7 +261,7 @@ exports.testProjectsSubmitPledge = function(test) {
 };
 
 exports.testProjectsGetRewards = function(test) {
-    testJson(test, "projects/1/rewards", function(json) {
+    testJson(test, "projects/1/rewards", {}, function(json) {
         test.ok(Array.isArray(json));
 
         for (let reward of json) {
@@ -260,20 +287,55 @@ exports.testUsersCreateDelete = function(test) {
 };
 
 exports.testUsersLoginLogout = function(test) {
-    test.fail();
-    test.done();
+    testPost(test, 'users/login?username=dclemett0&password=secret', {}, response => {
+        const statusCode = response.statusCode;
+        test.equal(statusCode, 200);
+
+        const contentType = response.headers['content-type'];
+        test.ok(/^application\/json/.test(contentType));
+
+        response.setEncoding('utf8');
+        extractData(response, data => {
+            const json = JSON.parse(data);
+
+            objectHasInteger(json, "id");
+            objectHasString(json, "token");
+
+            const token = json.token;
+
+            testJson(test, 'users/login_status', { "x-authorization": token }, json => {
+                test.strictEqual(json, true);
+
+                // Token login resolution is 1s, so wait at least 1s before logging out.
+                setTimeout(() => {
+                    testPost(test, 'users/logout', { "x-authorization": token }, response => {
+                        const statusCode = response.statusCode;
+                        test.equal(statusCode, 200);
+
+                        const contentType = response.headers['content-type'];
+                        test.ok(/^application\/json/.test(contentType));
+
+                        testJson(test, 'users/login_status', { "x-authorization": token }, json => {
+                            test.strictEqual(json, false);
+                            test.done();
+                        });
+                    });
+                }, 1000);
+            });
+        });
+    });
 };
 
 exports.testUsersGet = function(test) {
     // Assume 1 is always a valid id
-    testJson(test, "users/1", json => {
+    testJson(test, "users/1", {}, json => {
         test.ok(isObject(json));
         test.ok(objectHasInteger(json, "id"));
         test.ok(objectHasString(json, "username"));
         test.ok(objectHasString(json, "location"));
         test.ok(objectHasString(json, "email"));
 
-        testHttp(test, "users/ham", 404, function() {
+        testHttp(test, "users/ham", {}, 404, function() {
             test.done();
         });
     });

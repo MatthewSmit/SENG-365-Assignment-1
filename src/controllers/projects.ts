@@ -41,9 +41,9 @@ export function getProjects(startIndex: number, count: number, callback: (result
 
 export function createProject(project: ProjectData, callback: (result: ApiResponse<number>) => void): void {
     callback({
-                 httpCode: 200,
-                 response: 0
-             });
+        httpCode: 500,
+        response: 0
+    });
 }
 
 export function getProject(id: number, callback: (result: ApiResponse<ProjectDetails>) => void): void {
@@ -153,7 +153,7 @@ export function getProject(id: number, callback: (result: ApiResponse<ProjectDet
 }
 
 export function updateProject(id: number, open: boolean, callback: (result: number) => void): void {
-    callback(200);
+    callback(500);
 }
 
 export function getRewards(id: number, callback: (result: ApiResponse<Reward[]>) => void): void {
@@ -193,7 +193,7 @@ export function getRewards(id: number, callback: (result: ApiResponse<Reward[]>)
 }
 
 export function updateRewards(id: number, rewards: [Reward], callback: (result: number) => void): void {
-    callback(200);
+    callback(500);
 }
 
 export function getImage(id: number, callback: (result: ApiResponse<Buffer>) => void): void {
@@ -238,9 +238,9 @@ export function getImage(id: number, callback: (result: ApiResponse<Buffer>) => 
 }
 
 export function updateImage(id: number, image: any, callback: (result: number) => void): void {
-    callback(200);
+    callback(500);
 }
 
 export function submitPledge(id: number, pledge: Pledge, callback: (result: number) => void): void {
-    callback(200);
+    callback(500);
 }

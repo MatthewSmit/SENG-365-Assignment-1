@@ -5,7 +5,11 @@ import {verifyToken} from "../token";
 
 export function sendResponse(response: Response, httpError: number, responseBody: any) {
     if (isNullOrUndefined(responseBody)) {
-        response.status(httpError).end();
+        response.status(httpError);
+        if (httpError == 200) {
+            response.json("{}");
+        }
+        response.end();
     }
     else {
         response.json(responseBody);
