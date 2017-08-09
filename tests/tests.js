@@ -1,5 +1,5 @@
 const http = require('http');
-const basePath = "http://localhost/api/v1/";
+const basePath = "http://localhost:4941/api/v1/";
 
 function isObject(value) {
     return typeof value === "object" && value !== null;
