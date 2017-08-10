@@ -4,9 +4,9 @@ create table Users (
 	password VARCHAR(50) NOT NULL,
 	email VARCHAR(50) NOT NULL,
 	location VARCHAR(50) NOT NULL,
-	logoutTime DATETIME NOT NULL
+	logoutTime DATETIME NOT NULL DEFAULT NOW(),
 	PRIMARY KEY(id),
-	ADD UNIQUE INDEX username_UNIQUE(username ASC)
+	UNIQUE(username)
 );
 insert into Users (id, username, password, email, location) values (1, 'dclemett0', "secret", 'bmundy0@wufoo.com', '93 Maywood Pass');
 insert into Users (id, username, password, email, location) values (2, 'fbiddleston1', "secret", 'mscopyn1@marriott.com', '54781 Clarendon Way');

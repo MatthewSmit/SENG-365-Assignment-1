@@ -10,32 +10,30 @@ export function setup(newDataConnection: DataConnection) {
 export function getProjects(startIndex: number, count: number, callback: (result: ApiResponse<ProjectOverview[]>) => void) {
     // Get data from Projects table
     dataConnection.query("SELECT id, title, subtitle FROM Projects ORDER BY id LIMIT ? OFFSET ?",
-        [count < 0 ? 200 : count, startIndex],
-        (err, rows) => {
-            // 500 error if SQL issue
-            if (err) {
-                callback({
-                    httpCode: 500
+        [count < 0 ? 200 : count, startIndex])
+        .then(rows => {
+            // Convert from SQL row to ProjectOverview[]
+            let response: ProjectOverview[] = [];
+            for (let project of rows) {
+                response.push({
+                    id: project.id,
+                    title: project.title,
+                    subtitle: project.subtitle,
+                    imageUri: '/api/v1/projects/' + project.id + '/image'
                 });
             }
-            else {
-                // Convert from SQL row to ProjectOverview[]
-                let response: ProjectOverview[] = [];
-                for (let project of rows) {
-                    response.push({
-                        id: project.id,
-                        title: project.title,
-                        subtitle: project.subtitle,
-                        imageUri: '/api/v1/projects/' + project.id + '/image'
-                    });
-                }
 
-                // Return response
-                callback({
-                    httpCode: 200,
-                    response: response
-                });
-            }
+            // Return response
+            callback({
+                httpCode: 200,
+                response: response
+            });
+        })
+        .catch(() => {
+            // 500 error if SQL issue
+            callback({
+                httpCode: 500
+            });
         });
 }
 
@@ -72,16 +70,8 @@ export function getProject(id: number, callback: (result: ApiResponse<ProjectDet
     "INNER JOIN Users ON Users.id = Backers.user_id " +
     "WHERE Backers.project_id = ?;",
 
-    [id, id, id, id],
-
-    (err, rows) => {
-        if (err) {
-            // 500 error if SQL error
-            callback({
-                httpCode: 500
-            });
-        }
-        else {
+    [id, id, id, id])
+        .then(rows => {
             // 404 error if project id doesn't exist
             if (rows[0].length == 0) {
                 callback({
@@ -148,8 +138,13 @@ export function getProject(id: number, callback: (result: ApiResponse<ProjectDet
                     }
                 });
             }
-        }
-    });
+        })
+        .catch(() => {
+            // 500 error if SQL error
+            callback({
+                httpCode: 500
+            });
+        });
 }
 
 export function updateProject(id: number, open: boolean, callback: (result: number) => void): void {
@@ -159,20 +154,12 @@ export function updateProject(id: number, open: boolean, callback: (result: numb
 export function getRewards(id: number, callback: (result: ApiResponse<Reward[]>) => void): void {
     // Get all reward data for a project
     dataConnection.query(
-    "SELECT Rewards.id, Rewards.amount, Rewards.description " +
-    "FROM Rewards " +
-    "WHERE Rewards.project_id = ?",
+        "SELECT Rewards.id, Rewards.amount, Rewards.description " +
+        "FROM Rewards " +
+        "WHERE Rewards.project_id = ?",
 
-    [id],
-
-    (err, rows) => {
-        if (err) {
-            // Return 500 Error if SQL error
-            callback({
-                httpCode: 500
-            });
-        }
-        else {
+        [id])
+        .then(rows => {
             // Convert from SQL format to JSON format
             let rewards: Reward[] = [];
             for (let reward of rows) {
@@ -188,8 +175,13 @@ export function getRewards(id: number, callback: (result: ApiResponse<Reward[]>)
                 httpCode: 200,
                 response: rewards
             });
-        }
-    });
+        })
+        .catch(() => {
+            // Return 500 Error if SQL error
+            callback({
+                httpCode: 500
+            });
+        });
 }
 
 export function updateRewards(id: number, rewards: [Reward], callback: (result: number) => void): void {
@@ -198,43 +190,43 @@ export function updateRewards(id: number, rewards: [Reward], callback: (result: 
 
 export function getImage(id: number, callback: (result: ApiResponse<Buffer>) => void): void {
     dataConnection.query("SELECT imageData FROM Projects WHERE id=?",
-    [id],
-    (err, rows) => {
-        if (err) {
+    [id])
+        .then(rows => {
+            if (rows.length == 0) {
+                // Return 404 if project not found
+                callback({
+                    httpCode: 404
+                });
+            }
+            else {
+                // stored in the database as data:image/png;base64,BASE64 PNG DATA
+                let image = rows[0].imageData;
+                let match = image.match(/^data:([^,;]+);base64,(.+)$/);
+                if (match === null) {
+                    // 500 if unable to extract data from image. This shouldn't happen.
+                    console.log(`Regex for getting image for project id: ${id} has failed`);
+                    callback({
+                        httpCode: 500
+                    });
+                }
+                else {
+                    // Return the image
+                    let type =  match[1];
+                    let data = match[2];
+                    callback({
+                        httpCode: 200,
+                        type: type,
+                        response: new Buffer(data, "base64")
+                    });
+                }
+            }
+        })
+        .catch(() => {
             // Return 500 if SQL Error
             callback({
                 httpCode: 500
             });
-        }
-        else if (rows.length == 0) {
-            // Return 404 if project not found
-            callback({
-                httpCode: 404
-            });
-        }
-        else {
-            // stored in the database as data:image/png;base64,BASE64 PNG DATA
-            let image = rows[0].imageData;
-            let match = image.match(/^data:([^,;]+);base64,(.+)$/);
-            if (match === null) {
-                // 500 if unable to extract data from image. This shouldn't happen.
-                console.log(`Regex for getting image for project id: ${id} has failed`);
-                callback({
-                    httpCode: 500
-                });
-            }
-            else {
-                // Return the image
-                let type =  match[1];
-                let data = match[2];
-                callback({
-                    httpCode: 200,
-                    type: type,
-                    response: new Buffer(data, "base64")
-                });
-            }
-        }
-    });
+        });
 }
 
 export function updateImage(id: number, image: any, callback: (result: number) => void): void {

@@ -1,67 +1,130 @@
-import mysql = require('mysql');
+import {readdirSync, readFileSync, statSync} from "fs";
 
 import config = require('./config');
+import mysql = require('./mysql-promise');
 
 export class DataConnection {
-    private pool: mysql.IPool;
+    private pool: mysql.PromisePool;
 
     public constructor() {
         this.pool = mysql.createPool(config.mysql);
     }
 
     public testConnection(callback: () => void) {
-        let connection = mysql.createConnection(config.mysql);
-        connection.connect((err) => {
-            if (err)
-            {
-                console.log(err);
-                console.log("Unable to connect to mysql, trying again");
+        let connection: mysql.PromiseConnection;
+
+        mysql.createConnection(config.mysql)
+            .then(newConnection => {
+                connection = newConnection;
+                return connection.query("select * from Users");
+            })
+            .then(() => {
+                connection.end();
+                console.log("Connected to mysql");
+                callback();
+            })
+            .catch((error: mysql.IError) => {
+                console.log(error);
+                console.log("Unable to connect to mysql");
+
+                if (error.code == "ER_BAD_DB_ERROR") {
+                    this.createDatabase(callback);
+                }
+                else if (error.code == "ER_NO_SUCH_TABLE") {
+                    this.createTables(callback);
+                }
+                else {
+                    setTimeout(() => {
+                        this.testConnection(callback);
+                    },1000);
+                }
+            });
+    }
+
+    public query(sql: string, values?: any[]): Promise<any> {
+        let connection: mysql.PromiseConnection;
+
+        return this.pool.getConnection()
+            .then(newConnection => {
+                connection = newConnection;
+                return connection.query(sql, values);
+            })
+            .then(rows => {
+                connection.release();
+                return rows;
+            })
+            .catch(error => {
+                if (connection !== null) {
+                    connection.release();
+                }
+
+                console.log("Error with sql query " + sql);
+                console.log(error);
+
+                throw error;
+            });
+    }
+
+    private createDatabase(callback: () => void) {
+        console.log("Creating " + config.mysql.database + " database");
+        const mysqlConfig = JSON.parse(JSON.stringify(config.mysql));
+        delete mysqlConfig.database;
+
+        let connection: mysql.PromiseConnection;
+
+        mysql.createConnection(mysqlConfig)
+            .then((newConnection: mysql.PromiseConnection) => {
+                connection = newConnection;
+                return connection.query("CREATE DATABASE " + config.mysql.database);
+            })
+            .then(() => {
+                connection.end();
+                this.createTables(callback);
+            })
+            .catch((error: mysql.IError) => {
+                console.log(error);
+                console.log("Unable to connect to mysql");
 
                 setTimeout(() => {
                     this.testConnection(callback);
                 },1000);
-            }
-        });
-        connection.query("select * from Users;", (err, rows, fields) => {
-            if (err)
-            {
-                // TODO: Load mock data
-                console.log(err);
-                console.log("Unable to query mysql table, trying again");
-
-                this.testConnection(callback);
-            }
-            else
-            {
-                console.log("Connected to mysql");
-                callback();
-            }
-        });
-        connection.end();
+            })
     }
 
-    public query(sql: string, values: any[], callback: (err : mysql.IError, rows?: any, fields?: mysql.IFieldInfo[]) => void) {
-        this.pool.getConnection((err, connection) => {
-            if (err) {
-                console.log("Error with sql query " + sql);
-                console.log(err);
-                connection.release();
-                callback(err, null, null);
-            }
-            else {
-                let query = connection.query(sql, values, (err, rows, fields) => {
-                    connection.release();
-                    if (err) {
-                        console.log("Error with sql query " + sql);
-                        console.log(err);
-                        callback(err, null, null);
-                    }
-                    else {
-                        callback(err, rows, fields);
-                    }
-                });
-                console.log(query.sql);
+    private createTables(callback: () => void) {
+        console.log("Populating tables with mock data");
+
+        let query = '';
+
+        const directory = __dirname + '/../mocks/';
+        readdirSync(directory).forEach(file => {
+            let fullFile = directory + file;
+            const stat = statSync(fullFile);
+
+            if (stat.isFile() && file.match(/\.sql$/i)) {
+                query += readFileSync(fullFile, 'utf8');
             }
         });
+
+        let connection: mysql.PromiseConnection;
+
+        mysql.createConnection(config.mysql)
+            .then(newConnection => {
+                connection = newConnection;
+                return connection.query(query);
+            })
+            .then(() => {
+                connection.end();
+                console.log("Connected to mysql");
+                callback();
+            })
+            .catch(error => {
+                console.log(error);
+                console.log("Unable to connect to mysql");
+
+                setTimeout(() => {
+                    this.testConnection(callback);
+                },1000);
+            });
     }
 }
