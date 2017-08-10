@@ -23,6 +23,9 @@
         "mysql": "^2.14.1"
     },
     "devDependencies": {
-        "nodeunit": "^0.11.1"
+        "@types/nodeunit": "^0.0.30",
+        "@types/request-promise-native": "^1.0.6",
+        "nodeunit": "^0.11.1",
+        "request-promise-native": "^1.0.4"
     }
 }
