@@ -1,7 +1,7 @@
-import {readdirSync, readFileSync, statSync} from "fs";
+import {readdirSync, readFileSync, Stats, statSync} from "fs";
 
-import config = require('./config');
-import mysql = require('./mysql-promise');
+import config = require("./config");
+import mysql = require("./mysql-promise");
 
 export class DataConnection {
     private pool: mysql.PromisePool;
@@ -10,7 +10,7 @@ export class DataConnection {
         this.pool = mysql.createPool(config.mysql);
     }
 
-    public testConnection(callback: () => void) {
+    public testConnection(callback: () => void): void {
         let connection: mysql.PromiseConnection;
 
         mysql.createConnection(config.mysql)
@@ -27,16 +27,14 @@ export class DataConnection {
                 console.log(error);
                 console.log("Unable to connect to mysql");
 
-                if (error.code == "ER_BAD_DB_ERROR") {
+                if (error.code === "ER_BAD_DB_ERROR") {
                     this.createDatabase(callback);
-                }
-                else if (error.code == "ER_NO_SUCH_TABLE") {
+                } else if (error.code === "ER_NO_SUCH_TABLE") {
                     this.createTables(callback);
-                }
-                else {
+                } else {
                     setTimeout(() => {
                         this.testConnection(callback);
-                    },1000);
+                    }, 1000);
                 }
             });
     }
@@ -65,9 +63,9 @@ export class DataConnection {
             });
     }
 
-    private createDatabase(callback: () => void) {
+    private createDatabase(callback: () => void): void {
         console.log("Creating " + config.mysql.database + " database");
-        const mysqlConfig = JSON.parse(JSON.stringify(config.mysql));
+        const mysqlConfig: mysql.IPoolConfig = JSON.parse(JSON.stringify(config.mysql));
         delete mysqlConfig.database;
 
         let connection: mysql.PromiseConnection;
@@ -87,22 +85,22 @@ export class DataConnection {
 
                 setTimeout(() => {
                     this.testConnection(callback);
-                },1000);
-            })
+                }, 1000);
+            });
     }
 
-    private createTables(callback: () => void) {
+    private createTables(callback: () => void): void {
         console.log("Populating tables with mock data");
 
-        let query = '';
+        let query: string = "";
 
-        const directory = __dirname + '/../mocks/';
+        const directory: string = __dirname + "/../mocks/";
         readdirSync(directory).forEach(file => {
-            let fullFile = directory + file;
-            const stat = statSync(fullFile);
+            let fullFile: string = directory + file;
+            const stat: Stats = statSync(fullFile);
 
             if (stat.isFile() && file.match(/\.sql$/i)) {
-                query += readFileSync(fullFile, 'utf8');
+                query += readFileSync(fullFile, "utf8");
             }
         });
 
@@ -124,7 +122,7 @@ export class DataConnection {
 
                 setTimeout(() => {
                     this.testConnection(callback);
-                },1000);
+                }, 1000);
             });
     }
 }

@@ -1,46 +1,43 @@
 import {DataConnection} from "../dataConnection";
-import {ApiResponse, LogInResponse, PublicUser, User} from "./interfaces";
-import {createToken, TokenData} from "../token";
+import {IApiResponse, ILogInResponse, IPublicUser, IUser} from "./interfaces";
+import {createToken, ITokenData} from "../token";
 
 let dataConnection: DataConnection;
 
-export function setup(newDataConnection: DataConnection) {
+export function setup(newDataConnection: DataConnection): void {
     dataConnection = newDataConnection;
 }
 
-export function createUser(user: User, callback: (result: ApiResponse<number>) => void): void {
+export function createUser(user: IUser, callback: (result: IApiResponse<number>) => void): void {
     callback({
                  httpCode: 200,
                  response: 0
              });
 }
 
-export function login(username: string, password: string, callback: (result: ApiResponse<LogInResponse>) => void): void {
+export function login(username: string, password: string, callback: (result: IApiResponse<ILogInResponse>) => void): void {
     dataConnection.query("SELECT id, password FROM Users WHERE username=?",
     [username])
         .then(rows => {
             // 400 error if username doesn't match 1 user. (We should prevent it from matching more then 1 user in both SQL and createUser)
-            if (rows.length != 1) {
+            if (rows.length !== 1) {
                 callback({
                     httpCode: 400
                 });
-            }
-            else {
-                // Return 400 if password is wrong
-                const user = rows[0];
-                if (user.password != password) {
+            } else {
+                // return 400 if password is wrong
+                const user: any = rows[0];
+                if (user.password !== password) {
                     callback({
                         httpCode: 400
                     });
-                }
-                else {
-                    // Generate token for user
-                    const id = Number(user.id);
+                } else {
+                    // generate token for user
+                    const id: number = Number(user.id);
                     let token: string = null;
                     try {
                         token = createToken(id);
-                    }
-                    catch (error) {
+                    } catch (error) {
                         console.log("Error when generating login token:");
                         console.log(error);
                         callback({
@@ -66,8 +63,8 @@ export function login(username: string, password: string, callback: (result: Api
         });
 }
 
-export function logout(token: TokenData, callback: (result: number) => void) {
-    const id = token.id;
+export function logout(token: ITokenData, callback: (result: number) => void): void {
+    const id: number = token.id;
     dataConnection.query("UPDATE Users SET logoutTime=NOW() WHERE id=?",
         [id])
         .then(() => {
@@ -78,18 +75,17 @@ export function logout(token: TokenData, callback: (result: number) => void) {
         });
 }
 
-export function getUser(id: number, callback: (result: ApiResponse<PublicUser>) => void): void {
+export function getUser(id: number, callback: (result: IApiResponse<IPublicUser>) => void): void {
     dataConnection.query(
     "SELECT username, email, location FROM Users WHERE id=?",
     [id])
         .then(rows => {
-            if (rows.length == 0) {
+            if (rows.length === 0) {
                 callback({
                     httpCode: 404
                 });
-            }
-            else {
-                const user = rows[0];
+            } else {
+                const user: any = rows[0];
                 callback({
                     httpCode: 200,
                     response: {
@@ -108,28 +104,26 @@ export function getUser(id: number, callback: (result: ApiResponse<PublicUser>) 
         });
 }
 
-export function getLoginStatus(token: TokenData, callback: (result: ApiResponse<boolean>) => void): void {
-    const id = token.id;
+export function getLoginStatus(token: ITokenData, callback: (result: IApiResponse<boolean>) => void): void {
+    const id: number = token.id;
     dataConnection.query(
     "SELECT logoutTime FROM Users WHERE id=?",
     [id])
         .then(rows => {
-            if (rows.length == 0) {
+            if (rows.length === 0) {
                 callback({
                     httpCode: 200,
                     response: false
                 });
-            }
-            else {
-                const user = rows[0];
+            } else {
+                const user: any = rows[0];
                 const logoutTime: Date = user.logoutTime;
                 if (logoutTime >= token.issuedAt) {
                     callback({
                         httpCode: 200,
                         response: false
                     });
-                }
-                else {
+                } else {
                     callback({
                         httpCode: 200,
                         response: true
@@ -144,7 +138,7 @@ export function getLoginStatus(token: TokenData, callback: (result: ApiResponse<
         });
 }
 
-export function updateUser(id: number, user: User, callback: (result: number) => void): void {
+export function updateUser(id: number, user: IUser, callback: (result: number) => void): void {
     callback(500);
 }
 

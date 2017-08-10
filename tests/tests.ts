@@ -1,54 +1,58 @@
 import {Test} from "nodeunit";
-import request = require('request-promise-native')
-import {isArray} from "util";
 import {RequestResponse} from "request";
+import {isArray} from "util";
 
-const apiPath = "http://localhost:4941/api/v1/";
+import request = require("request-promise-native");
 
-function isObject(value: any) {
+const apiPath: string = "http://localhost:4941/api/v1/";
+
+function isObject(value: any): boolean {
     return typeof value === "object" && value !== null;
 }
 
-function objectHasInteger(object: any, field: string) {
-    if (!(field in object))
+function objectHasInteger(object: any, field: string): boolean {
+    if (!(field in object)) {
         return false;
+    }
 
     return Number.isInteger(object[field]);
 }
 
-function objectHasString(object: any, field: string) {
-    if (!(field in object))
+function objectHasString(object: any, field: string): boolean {
+    if (!(field in object)) {
         return false;
+    }
 
     return typeof object[field] === "string";
 }
 
-function objectHasObject(object: any, field: string) {
-    if (!(field in object))
+function objectHasObject(object: any, field: string): boolean {
+    if (!(field in object)) {
         return false;
+    }
 
     return isObject(object[field]);
 }
 
-function objectHasArray(object: any, field: string) {
-    if (!(field in object))
+function objectHasArray(object: any, field: string): any {
+    if (!(field in object)) {
         return false;
+    }
 
     return Array.isArray(object[field]);
 }
 
-function testContentType(test: Test, contentType: string | string[], regExp: RegExp | RegExp[]) {
-    let realContentType;
+function testContentType(test: Test, contentType: string | string[], regExp: RegExp | RegExp[]): void {
+    let realContentType: string;
 
     if (isArray(contentType)) {
         realContentType = contentType[0];
-    }
-    else {
+    } else {
         realContentType = contentType;
     }
 
     if (isArray(regExp)) {
-        let regexMatch = false;
+        let regexMatch: boolean = false;
         for (let regExpInstance of regExp) {
             if (regExpInstance.test(realContentType)) {
                 regexMatch = true;
@@ -56,8 +60,7 @@ function testContentType(test: Test, contentType: string | string[], regExp: Reg
             }
         }
         test.ok(regexMatch);
-    }
-    else {
+    } else {
         test.ok(regExp.test(realContentType));
     }
 }
@@ -77,12 +80,12 @@ function sendRequest(url: string, method: string, headers: any): Promise<Request
 function testJson(test: Test, url: string, headers: any): Promise<any> {
     return sendRequest(url, "GET", headers)
         .then((response: RequestResponse) => {
-            const statusCode = response.statusCode;
+            const statusCode: number = response.statusCode;
             test.equal(statusCode, 200);
 
-            testContentType(test, response.headers['content-type'], /^application\/json/);
+            testContentType(test, response.headers["content-type"], /^application\/json/);
 
-            response.setEncoding('utf8');
+            response.setEncoding("utf8");
 
             return JSON.parse(response.body);
         });
@@ -91,10 +94,10 @@ function testJson(test: Test, url: string, headers: any): Promise<any> {
 function testImage(test: Test, url: string, headers: any): Promise<void> {
     return sendRequest(url, "GET", headers)
         .then(response => {
-            const statusCode = response.statusCode;
+            const statusCode: number = response.statusCode;
             test.equal(statusCode, 200);
 
-            testContentType(test, response.headers['content-type'], [/^image\/png/, /^image\/jpeg/]);
+            testContentType(test, response.headers["content-type"], [/^image\/png/, /^image\/jpeg/]);
 
             return response.body;
         });
@@ -103,44 +106,55 @@ function testImage(test: Test, url: string, headers: any): Promise<void> {
 function testHttp(test: Test, url: string, headers: any, expectedStatusCode: number): Promise<void> {
     return sendRequest(url, "GET", headers)
         .then(response => {
-            const statusCode = response.statusCode;
+            const statusCode: number = response.statusCode;
             test.equal(statusCode, expectedStatusCode);
         });
 }
 
-function equals(lhs: any, rhs: any) {
-    if (!Array.isArray(lhs))
+function equals(lhs: any, rhs: any): boolean {
+    if (!Array.isArray(lhs)) {
         throw new Error();
-    if (!Array.isArray(rhs))
+    }
+    if (!Array.isArray(rhs)) {
         throw new Error();
+    }
 
-    if (lhs.length !== rhs.length)
+    if (lhs.length !== rhs.length) {
         return false;
+    }
 
     for (let i in lhs) {
-        let lhsValue = lhs[i];
-        let rhsValue = rhs[i];
+        if (i) {
+            let lhsValue: any = lhs[i];
+            let rhsValue: any = rhs[i];
 
-        if (!isObject(lhsValue))
-            return false;
-        if (!isObject(rhsValue))
-            return false;
+            if (!isObject(lhsValue)) {
+                return false;
+            }
+            if (!isObject(rhsValue)) {
+                return false;
+            }
 
-        if (lhsValue.id !== rhsValue.id)
-            return false;
-        if (lhsValue.title !== rhsValue.title)
-            return false;
-        if (lhsValue.subtitle !== rhsValue.subtitle)
-            return false;
-        if (lhsValue.imageUri !== rhsValue.imageUri)
-            return false;
+            if (lhsValue.id !== rhsValue.id) {
+                return false;
+            }
+            if (lhsValue.title !== rhsValue.title) {
+                return false;
+            }
+            if (lhsValue.subtitle !== rhsValue.subtitle) {
+                return false;
+            }
+            if (lhsValue.imageUri !== rhsValue.imageUri) {
+                return false;
+            }
+        }
     }
 
     return true;
 }
 
 
-export function testProjects(test: Test) {
+export function testProjects(test: Test): void {
     testJson(test, "projects", {})
         .then(json => {
             test.ok(Array.isArray(json));
@@ -162,7 +176,7 @@ export function testProjects(test: Test) {
         });
 }
 
-export function testProjectsAdvanced(test: Test) {
+export function testProjectsAdvanced(test: Test): void {
     let allProjects: any;
 
     testJson(test, "projects", {})
@@ -191,13 +205,13 @@ export function testProjectsAdvanced(test: Test) {
         });
 }
 
-export function testProjectsCreate(test: Test) {
+export function testProjectsCreate(test: Test): void {
     test.ok(false);
     test.done();
 }
 
-export function testProjectsId(test: Test) {
-    // Assume 1 is always a valid id
+export function testProjectsId(test: Test): void {
+    // assume 1 is always a valid id
     testJson(test, "projects/1", {})
         .then(json => {
             test.ok(isObject(json));
@@ -205,12 +219,12 @@ export function testProjectsId(test: Test) {
             test.ok(objectHasObject(json, "progress"));
             test.ok(objectHasArray(json, "backers"));
 
-            const project = json.project;
+            const project: any = json.project;
             test.ok(objectHasInteger(project, "id"));
             test.ok(objectHasInteger(project, "creationDate"));
             test.ok(objectHasObject(project, "data"));
 
-            const projectData = project.data;
+            const projectData: any = project.data;
             test.ok(objectHasString(projectData, "title"));
             test.ok(objectHasString(projectData, "subtitle"));
             test.ok(objectHasString(projectData, "description"));
@@ -219,14 +233,14 @@ export function testProjectsId(test: Test) {
             test.ok(objectHasArray(projectData, "creators"));
             test.ok(objectHasArray(projectData, "rewards"));
 
-            const projectCreators = projectData.creators;
+            const projectCreators: any = projectData.creators;
             for (let projectCreator of projectCreators) {
                 test.ok(isObject(projectCreator));
                 test.ok(objectHasInteger(projectCreator, "id"));
                 test.ok(objectHasString(projectCreator, "name"));
             }
 
-            const projectRewards = projectData.rewards;
+            const projectRewards: any = projectData.rewards;
             for (let projectReward of projectRewards) {
                 test.ok(isObject(projectReward));
                 test.ok(objectHasInteger(projectReward, "id"));
@@ -234,12 +248,12 @@ export function testProjectsId(test: Test) {
                 test.ok(objectHasString(projectReward, "description"));
             }
 
-            const progress = json.progress;
+            const progress: any = json.progress;
             test.ok(objectHasInteger(progress, "target"));
             test.ok(objectHasInteger(progress, "currentPledged"));
             test.ok(objectHasInteger(progress, "numberOfBackers"));
 
-            const backers = json.backers;
+            const backers: any = json.backers;
             for (let backer of backers) {
                 test.ok(isObject(backer));
                 test.ok(objectHasString(backer, "name"));
@@ -257,33 +271,33 @@ export function testProjectsId(test: Test) {
         });
 }
 
-export function testProjectsModify(test: Test) {
+export function testProjectsModify(test: Test): void {
     test.ok(false);
     test.done();
 }
 
-export function testProjectsImage(test: Test) {
+export function testProjectsImage(test: Test): void {
     testImage(test, "projects/1/image", {})
         .then(() => {
             test.done();
         })
         .catch(error => {
             test.ok(false, error);
-            test.done
+            test.done();
         });
 }
 
-export function testProjectsModifyImage(test: Test) {
+export function testProjectsModifyImage(test: Test): void {
     test.ok(false);
     test.done();
 }
 
-export function testProjectsSubmitPledge(test: Test) {
+export function testProjectsSubmitPledge(test: Test): void {
     test.ok(false);
     test.done();
 }
 
-export function testProjectsGetRewards(test: Test) {
+export function testProjectsGetRewards(test: Test): void {
     testJson(test, "projects/1/rewards", {})
         .then(json => {
             test.ok(Array.isArray(json));
@@ -304,52 +318,52 @@ export function testProjectsGetRewards(test: Test) {
         });
 }
 
-export function testProjectsPutRewards(test: Test) {
+export function testProjectsPutRewards(test: Test): void {
     test.ok(false);
     test.done();
 }
 
-export function testUsersCreateDelete(test: Test) {
+export function testUsersCreateDelete(test: Test): void {
     test.ok(false);
     test.done();
 }
 
-export function testUsersLoginLogout(test: Test) {
+export function testUsersLoginLogout(test: Test): void {
     let token: string = null;
 
-    sendRequest('users/login?username=dclemett0&password=secret', "POST", {})
+    sendRequest("users/login?username=dclemett0&password=secret", "POST", {})
         .then(response => {
-            const statusCode = response.statusCode;
+            const statusCode: number = response.statusCode;
             test.equal(statusCode, 200);
 
-            testContentType(test, response.headers['content-type'], /^application\/json/);
+            testContentType(test, response.headers["content-type"], /^application\/json/);
 
-            response.setEncoding('utf8');
-            const json = JSON.parse(response.body);
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
 
             objectHasInteger(json, "id");
             objectHasString(json, "token");
 
             token = json.token;
 
-            return testJson(test, 'users/login_status', { "x-authorization": token });
+            return testJson(test, "users/login_status", {"x-authorization": token});
         })
         .then(json => {
             test.strictEqual(json, true);
 
-            // Token login resolution is 1s, so wait at least 1s before logging out.
+            // token login resolution is 1s, so wait at least 1s before logging out.
             return new Promise(resolve => setTimeout(() => resolve(), 1000));
         })
         .then(() => {
-            return sendRequest('users/logout', "POST", { "x-authorization": token });
+            return sendRequest("users/logout", "POST", {"x-authorization": token});
         })
         .then(response => {
-            const statusCode = response.statusCode;
+            const statusCode: number = response.statusCode;
             test.equal(statusCode, 200);
 
-            testContentType(test, response.headers['content-type'], /^application\/json/);
+            testContentType(test, response.headers["content-type"], /^application\/json/);
 
-            return testJson(test, 'users/login_status', { "x-authorization": token });
+            return testJson(test, "users/login_status", {"x-authorization": token});
         })
         .then(json => {
             test.strictEqual(json, false);
@@ -361,8 +375,8 @@ export function testUsersLoginLogout(test: Test) {
         });
 }
 
-export function testUsersGet(test: Test) {
-    // Assume 1 is always a valid id
+export function testUsersGet(test: Test): void {
+    // assume 1 is always a valid id
     testJson(test, "users/1", {})
         .catch(json => {
             test.ok(isObject(json));
@@ -382,7 +396,7 @@ export function testUsersGet(test: Test) {
         });
 }
 
-export function testUsersUpdate(test: Test) {
+export function testUsersUpdate(test: Test): void {
     test.ok(false);
     test.done();
 }

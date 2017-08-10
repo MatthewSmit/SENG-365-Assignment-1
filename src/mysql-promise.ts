@@ -1,8 +1,8 @@
-import mysql = require('mysql');
+import mysql = require("mysql");
 
-import {IConnection, IConnectionConfig, IError, IPool, IPoolConfig, IQuery} from "mysql";
+import {IConnection, IConnectionConfig, IError, IPool, IPoolConfig} from "mysql";
 
-export {IError, IFieldInfo, IPool} from 'mysql';
+export {IError, IFieldInfo, IPool, IPoolConfig} from "mysql";
 
 export class PromiseConnection {
     private connection: IConnection;
@@ -16,8 +16,7 @@ export class PromiseConnection {
             this.connection.connect(error => {
                 if (error) {
                     reject(error);
-                }
-                else {
+                } else {
                     resolve(this);
                 }
             });
@@ -29,19 +28,18 @@ export class PromiseConnection {
             this.connection.query(sql, values, (error, rows) => {
                 if (error) {
                     reject(error);
-                }
-                else {
+                } else {
                     resolve(rows);
                 }
             });
         });
     }
 
-    public end() {
-        this.connection.end();
-    }
+    public end(): void {
+    this.connection.end();
+}
 
-    public release() {
+    public release(): void {
         this.connection.release();
     }
 }
@@ -58,8 +56,7 @@ export class PromisePool {
             this.pool.getConnection((error, connection) => {
                 if (error) {
                     reject(error);
-                }
-                else {
+                } else {
                     resolve(new PromiseConnection(connection));
                 }
             });
@@ -67,10 +64,10 @@ export class PromisePool {
     }
 }
 
-export function createPool(config: IPoolConfig) {
+export function createPool(config: IPoolConfig): PromisePool {
     return new PromisePool(mysql.createPool(config));
 }
 
-export function createConnection(config: IConnectionConfig) {
+export function createConnection(config: IConnectionConfig): Promise<PromiseConnection> {
     return new PromiseConnection(mysql.createConnection(config)).connect();
 }
