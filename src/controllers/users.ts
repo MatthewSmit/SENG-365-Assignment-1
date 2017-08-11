@@ -139,7 +139,27 @@ export function getLoginStatus(token: ITokenData, callback: (result: IApiRespons
 }
 
 export function updateUser(id: number, user: IUser, callback: (result: number) => void): void {
-    callback(500);
+    dataConnection.query("SELECT password FROM Users WHERE id=?",
+        [id])
+        .then(rows => {
+            if (rows.length === 0) {
+                callback(404);
+            } else if (rows[0].password !== user.password) {
+                callback(401);
+            } else {
+                dataConnection.query("UPDATE Users SET username=?, location=?, email=? WHERE id=?",
+                    [user.user.username, user.user.location, user.user.email, id])
+                    .then(() => {
+                        callback(200);
+                    })
+                    .catch(() => {
+                        callback(500);
+                    });
+            }
+        })
+        .catch(() => {
+            callback(500);
+        });
 }
 
 export function deleteUser(id: number, callback: (result: number) => void): void {

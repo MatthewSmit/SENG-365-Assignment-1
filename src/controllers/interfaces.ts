@@ -1,4 +1,4 @@
-import {isArray, isBoolean, isString} from "util";
+import {isArray, isBoolean, isObject, isString} from "util";
 
 // used for the GET - projects/ endpoint. This contains a subset of the project data.
 export interface IProjectOverview {
@@ -127,7 +127,8 @@ export interface IUser {
 }
 
 export function verifyUser(user: any): boolean {
-    return "user" in user && verifyPublicUser(user.user) &&
+    return isObject(user) &&
+        "user" in user && verifyPublicUser(user.user) &&
         "password" in user && isString(user.password);
 }
 

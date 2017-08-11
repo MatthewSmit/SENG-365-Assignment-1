@@ -7,7 +7,7 @@ export function sendResponse(response: Response, httpError: number, responseBody
     if (isNullOrUndefined(responseBody)) {
         response.status(httpError);
         if (httpError === 200) {
-            response.json("{}");
+            response.json();
         }
         response.end();
     } else {

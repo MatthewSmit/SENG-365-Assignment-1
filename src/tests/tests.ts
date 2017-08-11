@@ -1,8 +1,9 @@
 import {Test} from "nodeunit";
 import {RequestResponse} from "request";
-import {isArray} from "util";
+import {isArray, isNullOrUndefined} from "util";
 
 import request = require("request-promise-native");
+import {IPublicUser} from "../controllers/interfaces";
 
 const apiPath: string = "http://localhost:4941/api/v1/";
 
@@ -65,7 +66,7 @@ function testContentType(test: Test, contentType: string | string[], regExp: Reg
     }
 }
 
-function sendRequest(url: string, method: string, headers: any): Promise<RequestResponse> {
+function sendRequest(url: string, method: string, headers: any, body?: any): Promise<RequestResponse> {
     const options: any = {
         uri: apiPath + url,
         method: method,
@@ -73,6 +74,11 @@ function sendRequest(url: string, method: string, headers: any): Promise<Request
         simple: false,
         resolveWithFullResponse: true
     };
+
+    if (!isNullOrUndefined(body)) {
+        options.body = JSON.stringify(body);
+        headers["content-type"] = "application/json";
+    }
 
     return request(options);
 }
@@ -361,8 +367,6 @@ export function testUsersLoginLogout(test: Test): void {
             const statusCode: number = response.statusCode;
             test.equal(statusCode, 200);
 
-            testContentType(test, response.headers["content-type"], /^application\/json/);
-
             return testJson(test, "users/login_status", {"x-authorization": token});
         })
         .then(json => {
@@ -378,7 +382,7 @@ export function testUsersLoginLogout(test: Test): void {
 export function testUsersGet(test: Test): void {
     // assume 1 is always a valid id
     testJson(test, "users/1", {})
-        .catch(json => {
+        .then(json => {
             test.ok(isObject(json));
             test.ok(objectHasInteger(json, "id"));
             test.ok(objectHasString(json, "username"));
@@ -397,6 +401,114 @@ export function testUsersGet(test: Test): void {
 }
 
 export function testUsersUpdate(test: Test): void {
-    test.ok(false);
-    test.done();
+    const TEST_USERNAME: string = "NewUserName";
+    const TEST_LOCATION: string = "NewLocation";
+    const TEST_EMAIL: string = "NewEmail@Email.Email";
+
+    let token: string = null;
+    let id: number = null;
+    let originalData: IPublicUser = null;
+    let newData: IPublicUser = null;
+
+    sendRequest("users/login?username=dclemett0&password=secret", "POST", {})
+        // test login worked then get user data
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            testContentType(test, response.headers["content-type"], /^application\/json/);
+
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
+
+            objectHasInteger(json, "id");
+            objectHasString(json, "token");
+
+            token = json.token;
+            id = json.id;
+
+            return testJson(test, `users/${id}`, {"x-authorization": token});
+        })
+        // store original user data then update user data with test data
+        .then(json => {
+            originalData = json;
+
+            newData = JSON.parse(JSON.stringify(originalData));
+            newData.username = TEST_USERNAME;
+            newData.location = TEST_LOCATION;
+            newData.email = TEST_EMAIL;
+
+            return sendRequest(`users/${id}`, "PUT", {"x-authorization": token}, {
+                user: newData,
+                password: "secret"
+            });
+        })
+        // test user data response then get user data again
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            return testJson(test, `users/${id}`, {"x-authorization": token});
+        })
+        // test user data was changed then restore original user data
+        .then(json => {
+            test.strictEqual(json.username, TEST_USERNAME);
+            test.strictEqual(json.location, TEST_LOCATION);
+            test.strictEqual(json.email, TEST_EMAIL);
+
+            return sendRequest(`users/${id}`, "PUT", {"x-authorization": token}, {
+                user: originalData,
+                password: "secret"
+            });
+        })
+        // test updating user data with wrong password
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            return sendRequest(`users/${id}`, "PUT", {"x-authorization": token}, {
+                user: newData,
+                password: "wrongSecret"
+            });
+        })
+        // test updating user data with no token
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 401);
+
+            return sendRequest(`users/${id}`, "PUT", {}, {
+                user: newData,
+                password: "secret"
+            });
+        })
+        // test updating other user data
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 401);
+
+            return sendRequest(`users/5`, "PUT", {"x-authorization": token}, {
+                user: newData,
+                password: "secret"
+            });
+        })
+        // test updating user data with invalid id
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 403);
+
+            return sendRequest(`users/ham`, "PUT", {"x-authorization": token}, {
+                user: newData,
+                password: "secret"
+            });
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 404);
+
+            test.done();
+        })
+        .catch(error => {
+            test.ok(false, error);
+            test.done();
+        });
 }

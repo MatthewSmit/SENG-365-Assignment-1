@@ -76,8 +76,13 @@ export = function(dataConnection: DataConnection): Router {
         .put((request, response) => {
             const id: number = getId(request);
             const user: IUser = request.body;
+            const token: ITokenData = getToken(request);
             if (id === null) {
                 sendResponse(response, 404, null);
+            } else if (token === null) {
+                sendResponse(response, 401, null);
+            } else if (token.id !== id) {
+                sendResponse(response, 403, null);
             } else if (!verifyUser(user)) {
                 sendResponse(response, 400, null);
             } else {
