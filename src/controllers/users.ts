@@ -1,6 +1,7 @@
 import {DataConnection} from "../dataConnection";
 import {IApiResponse, ILogInResponse, IPublicUser, IUser} from "./interfaces";
 import {createToken, ITokenData} from "../token";
+import {isUndefined} from "util";
 
 let dataConnection: DataConnection;
 
@@ -9,10 +10,42 @@ export function setup(newDataConnection: DataConnection): void {
 }
 
 export function createUser(user: IUser, callback: (result: IApiResponse<number>) => void): void {
-    callback({
-                 httpCode: 200,
-                 response: 0
-             });
+    dataConnection.query("SELECT id FROM Users WHERE username=?",
+        [user.user.username])
+        .then(rows => {
+            if (rows.length === 0) {
+                return dataConnection.query("INSERT INTO Users (username, password, location, email) VALUES (?, ?, ?, ?)",
+                    [user.user.username, user.password, user.user.location, user.user.email]);
+            } else {
+                return { httpCode: 400, response: 0 };
+            }
+        })
+        .then(result => {
+            if (isUndefined(result.httpCode)) {
+                return dataConnection.query("SELECT id FROM Users WHERE username=?", [user.user.username]);
+            } else {
+                return result;
+            }
+        })
+        .then(result => {
+            if (isUndefined(result.httpCode)) {
+                return { httpCode: 201, response: result[0].id };
+            } else {
+                return result;
+            }
+        })
+        .then(result => {
+            callback({
+                httpCode: result.httpCode,
+                response: result.response
+            });
+        })
+        .catch(() => {
+            callback({
+                httpCode: 500,
+                response: 0
+            });
+        });
 }
 
 export function login(username: string, password: string, callback: (result: IApiResponse<ILogInResponse>) => void): void {
@@ -104,40 +137,6 @@ export function getUser(id: number, callback: (result: IApiResponse<IPublicUser>
         });
 }
 
-export function getLoginStatus(token: ITokenData, callback: (result: IApiResponse<boolean>) => void): void {
-    const id: number = token.id;
-    dataConnection.query(
-    "SELECT logoutTime FROM Users WHERE id=?",
-    [id])
-        .then(rows => {
-            if (rows.length === 0) {
-                callback({
-                    httpCode: 200,
-                    response: false
-                });
-            } else {
-                const user: any = rows[0];
-                const logoutTime: Date = user.logoutTime;
-                if (logoutTime >= token.issuedAt) {
-                    callback({
-                        httpCode: 200,
-                        response: false
-                    });
-                } else {
-                    callback({
-                        httpCode: 200,
-                        response: true
-                    });
-                }
-            }
-        })
-        .catch(() => {
-            callback({
-                httpCode: 500
-            });
-        });
-}
-
 export function updateUser(id: number, user: IUser, callback: (result: number) => void): void {
     dataConnection.query("SELECT password FROM Users WHERE id=?",
         [id])
@@ -163,5 +162,12 @@ export function updateUser(id: number, user: IUser, callback: (result: number) =
 }
 
 export function deleteUser(id: number, callback: (result: number) => void): void {
-    callback(500);
+    dataConnection.query("DELETE FROM Users WHERE id=?",
+        [id])
+        .then(() => {
+            callback(200);
+        })
+        .catch(() => {
+            callback(500);
+        });
 }

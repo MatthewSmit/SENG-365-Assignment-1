@@ -330,8 +330,80 @@ export function testProjectsPutRewards(test: Test): void {
 }
 
 export function testUsersCreateDelete(test: Test): void {
-    test.ok(false);
-    test.done();
+    const TEST_USERNAME: string = "NewUser";
+    const TEST_LOCATION: string = "NewLocation";
+    const TEST_EMAIL: string = "NewEmail@Email.Email";
+
+    let token: string = null;
+    let id: number = null;
+
+    sendRequest(`users/login?username=${TEST_USERNAME}&password=secret`, "POST", {})
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 400);
+
+            return sendRequest("users", "POST", {}, {
+                user: {
+                    id: 0,
+                    username: TEST_USERNAME,
+                    location: TEST_LOCATION,
+                    email: TEST_EMAIL
+                },
+                password: "secret"
+            });
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 201);
+
+            return sendRequest(`users/login?username=${TEST_USERNAME}&password=secret`, "POST", {});
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            testContentType(test, response.headers["content-type"], /^application\/json/);
+
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
+
+            objectHasInteger(json, "id");
+            objectHasString(json, "token");
+
+            token = json.token;
+            id = json.id;
+
+            return testJson(test, `users/${id}`, {"x-authorization": token});
+        })
+        .then(json => {
+            test.strictEqual(json.username, TEST_USERNAME);
+            test.strictEqual(json.location, TEST_LOCATION);
+            test.strictEqual(json.email, TEST_EMAIL);
+
+            return sendRequest(`users/${id}`, "DELETE", {});
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 401);
+
+            return sendRequest("users/1", "DELETE", {"x-authorization": token});
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 403);
+
+            return sendRequest(`users/${id}`, "DELETE", {"x-authorization": token});
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            test.done();
+        })
+        .catch(error => {
+            test.ok(false, error);
+            test.done();
+        });
 }
 
 export function testUsersLoginLogout(test: Test): void {
