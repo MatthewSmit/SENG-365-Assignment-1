@@ -5,7 +5,7 @@ import {isArray, isBoolean, isNullOrUndefined} from "util";
 import {IPledge, IProjectData, IReward, verifyPledge, verifyProjectData, verifyReward} from "../controllers/interfaces";
 import projects = require("../controllers/projects");
 import {DataConnection} from "../dataConnection";
-import {sendResponse, getId} from "./routeHelper";
+import {sendResponse, getId, getToken} from "./routeHelper";
 
 export = function(dataConnection: DataConnection): Router {
     projects.setup(dataConnection);
@@ -22,13 +22,34 @@ export = function(dataConnection: DataConnection): Router {
         })
         .post((request, response) => {
             const project: IProjectData = request.body;
-            if (!verifyProjectData(project)) {
-                sendResponse(response, 400, null);
-            } else {
-                projects.createProject(project, result => {
-                    sendResponse(response, result.httpCode, result.response);
+
+            getToken(dataConnection, request)
+                .then(token => {
+                    if (token === null) {
+                        sendResponse(response, 401, null);
+                    } else if (!verifyProjectData(project)) {
+                        sendResponse(response, 400, null);
+                    } else {
+                        let anyCreators: boolean = false;
+                        for (let creator of project.creators) {
+                            if (creator.id === token.id) {
+                                anyCreators = true;
+                                break;
+                            }
+                        }
+
+                        if (!anyCreators) {
+                            sendResponse(response, 401, null);
+                        } else {
+                            projects.createProject(project, result => {
+                                sendResponse(response, result.httpCode, result.response);
+                            });
+                        }
+                    }
+                })
+                .catch(() => {
+                    sendResponse(response, 500, null);
                 });
-            }
         });
 
     router.route("/projects/:id")

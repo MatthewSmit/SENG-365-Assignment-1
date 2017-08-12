@@ -1,6 +1,20 @@
 import {DataConnection} from "../dataConnection";
 import {IApiResponse, IBacker, ICreator, IPledge, IProjectData, IProjectDetails, IProjectOverview, IReward} from "./interfaces";
 
+const DEFAULT_IMAGE: string = "data:image/png;base64," +
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U" +
+    "29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAI4SURBVDjLhVPNaxNREJ8k2yxuDMGEkGi0Ql" +
+    "tREC9+HQQPKl5EkBz8D7xI/QDxIh4KpeA5lII3IbeAF6UKHjU5SS2op1JKTFiN5GOD6WY/s/t8M5u" +
+    "3bkvBWWZneJn3m99vdhJrNBqrjLEH3MH3fRBRuOd55NN8qVwuL0PU6vX6N13X2f+s3++zWq1WxwZR" +
+    "lxAZbf37CBiP/IzcxwL4l1+bZcRkvxGAG2DAscxMAIAPRaBXS3NIguu6VNdefHoPDPP97Ku1X1KAy" +
+    "nXzwuGuBdudMSiHkmHnoxmJxwRdnEwm0L7/5HkK3BV9bGzwo0uBhKmeTEqGCwvyHimYDwcBgxPq7y" +
+    "KMjTe2Y68cjnsXf1y/s0gMEjEAj1e2h+4e/X5kHv6Xr3C+rS7ounHbNa3HcpJVYGw+JADsfuuMHGo" +
+    "k6VNWaMmkDNrnFEx2deAMXpz88DrWvHyzApZ1WkJdwhzHgW63C5qmEeVsNgv5fJ4D8JkguGEBGxtB" +
+    "sWECs20gAPEp8bKqquFC8f2gPJ1Og692QHIdYIb1rHn2yqO0IsHoj70VFwywcDAYUCyVSuQI0uv1K" +
+    "MZuXIVP2SM7YJrrM75XYY4NYNmr8agE0VloF/MRM9mcP95hln1XTjAY/RxuzPW21iQcnJCAmpF2q9" +
+    "UKgfBMAGCzuebm0k7uVAecyVvaxCgDHBh25XtPF3K5HBSLxRBAfKX5wfbLcJXxEH9UFIW8UCjAQYY" +
+    "1B/4XOIOP1Wr1HDLBgmgUecTf7Qf4C2kj+HVimC2aAAAAAElFTkSuQmCC";
+
 let dataConnection: DataConnection;
 
 export function setup(newDataConnection: DataConnection): void {
@@ -38,10 +52,39 @@ export function getProjects(startIndex: number, count: number, callback: (result
 }
 
 export function createProject(project: IProjectData, callback: (result: IApiResponse<number>) => void): void {
-    callback({
-        httpCode: 500,
-        response: 0
-    });
+    let projectId: number = null;
+
+    dataConnection.query("INSERT INTO Projects (title, subtitle, description, imageData, target) VALUES (?, ?, ?, ?, ?);" +
+        "SELECT LAST_INSERT_ID();",
+        [project.title, project.subtitle, project.description, DEFAULT_IMAGE, project.target])
+        .then(rows => {
+            projectId = rows[1][0]["LAST_INSERT_ID()"];
+
+            let query: string = "";
+            let queryData: any[] = [];
+            for (let creator of project.creators) {
+                query += "INSERT INTO ProjectCreators (project_id, user_id) VALUES (?, ?);";
+                queryData.push(projectId, creator.id);
+            }
+
+            for (let reward of project.rewards) {
+                query += "INSERT INTO Rewards (project_id, amount, description) VALUES (?, ?, ?);";
+                queryData.push(projectId, reward.amount, reward.description);
+            }
+
+            return dataConnection.query(query, queryData);
+        })
+        .then(() => {
+            callback({
+                httpCode: 201,
+                response: projectId
+            });
+        })
+        .catch(() => {
+            callback({
+                httpCode: 500
+            });
+        });
 }
 
 export function getProject(id: number, callback: (result: IApiResponse<IProjectDetails>) => void): void {
@@ -65,7 +108,7 @@ export function getProject(id: number, callback: (result: IApiResponse<IProjectD
     "WHERE Rewards.project_id = ?; " +
 
     // get all backers for the project
-    "SELECT Users.id, Users.username, Backers.amount, Backers.private " +
+    "SELECT Users.id, Backers.amount, Backers.private " +
     "FROM Backers " +
     "INNER JOIN Users ON Users.id = Backers.user_id " +
     "WHERE Backers.project_id = ?;",
@@ -105,7 +148,7 @@ export function getProject(id: number, callback: (result: IApiResponse<IProjectD
                 for (let backer of backersSql) {
                     if (backer.private === 0) {
                         backers.push({
-                            name: backer.username,
+                            name: backer.id,
                             amount: backer.amount
                         });
                     }

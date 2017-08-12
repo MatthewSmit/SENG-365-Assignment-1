@@ -3,7 +3,7 @@ import {RequestResponse} from "request";
 import {isArray, isNullOrUndefined} from "util";
 
 import request = require("request-promise-native");
-import {IPublicUser} from "../controllers/interfaces";
+import {IProjectData, IPublicUser} from "../controllers/interfaces";
 
 const apiPath: string = "http://localhost:4941/api/v1/";
 
@@ -212,8 +212,69 @@ export function testProjectsAdvanced(test: Test): void {
 }
 
 export function testProjectsCreate(test: Test): void {
-    test.ok(false);
-    test.done();
+    let token: string = null;
+    let id: number = null;
+
+    sendRequest("users/login?username=dclemett0&password=secret", "POST", {})
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            testContentType(test, response.headers["content-type"], /^application\/json/);
+
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
+
+            objectHasInteger(json, "id");
+            objectHasString(json, "token");
+
+            token = json.token;
+            id = json.id;
+
+            let projectData: IProjectData = {
+                title: "TEST PROJECT",
+                subtitle: "TEST PROJECT SUBTITLE",
+                description: "TEST PROJECT DESCRIPTION",
+                imageUri: "",
+                target: 10000,
+                creators: [
+                    {
+                        id: id,
+                        name: ""
+                    }
+                ],
+                rewards: [
+                    {
+                        id: 0,
+                        amount: 100,
+                        description: "REWARD 0"
+                    },
+                    {
+                        id: 0,
+                        amount: 1000,
+                        description: "REWARD 1"
+                    }
+                ]
+            };
+
+            return sendRequest("projects", "POST", {"x-authorization": token}, projectData);
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 201);
+
+            testContentType(test, response.headers["content-type"], /^application\/json/);
+
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
+
+            test.notStrictEqual(json, 0);
+            test.done();
+        })
+        .catch(error => {
+            test.ok(false, error);
+            test.done();
+        });
 }
 
 export function testProjectsId(test: Test): void {
@@ -262,7 +323,7 @@ export function testProjectsId(test: Test): void {
             const backers: any = json.backers;
             for (let backer of backers) {
                 test.ok(isObject(backer));
-                test.ok(objectHasString(backer, "name"));
+                test.ok(objectHasInteger(backer, "name"));
                 test.ok(objectHasInteger(backer, "amount"));
             }
 
