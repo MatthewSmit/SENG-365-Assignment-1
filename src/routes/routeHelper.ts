@@ -1,5 +1,5 @@
 import {Request, Response} from "express";
-import {isNullOrUndefined} from "util";
+import {isNullOrUndefined, isString} from "util";
 
 import {ITokenData, verifyToken} from "../token";
 import {DataConnection} from "../dataConnection";
@@ -29,11 +29,11 @@ export function getId(request: Request): number {
 
 export function getToken(dataConnection: DataConnection, request: Request): Promise<ITokenData> {
     const tokenString: string | string[] | any = request.headers["x-authorization"];
-    if (isNullOrUndefined(tokenString) || Array.isArray(tokenString)) {
+    if (!isString(tokenString)) {
         return Promise.resolve(null);
     }
 
-    const token: ITokenData = verifyToken(tokenString);
+    const token: ITokenData = verifyToken(<string>tokenString);
     if (isNullOrUndefined(token)) {
         return Promise.resolve(null);
     }
