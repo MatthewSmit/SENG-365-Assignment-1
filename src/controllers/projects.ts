@@ -1,5 +1,7 @@
 import {DataConnection} from "../dataConnection";
 import {IApiResponse, IBacker, ICreator, IPledge, IProjectData, IProjectDetails, IProjectOverview, IReward} from "./interfaces";
+import {PathLike, readFileSync} from "fs";
+import config = require("../config");
 
 const DEFAULT_IMAGE: string = "data:image/png;base64," +
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U" +
@@ -190,7 +192,14 @@ export function getProject(id: number, callback: (result: IApiResponse<IProjectD
 }
 
 export function updateProject(id: number, open: boolean, callback: (result: number) => void): void {
-    callback(500);
+    dataConnection.query("UPDATE Projects SET isOpen=? WHERE id=?",
+        [open, id])
+        .then(() => {
+            callback(201);
+        })
+        .catch(() => {
+            callback(500);
+        });
 }
 
 export function getRewards(id: number, callback: (result: IApiResponse<IReward[]>) => void): void {
@@ -269,8 +278,23 @@ export function getImage(id: number, callback: (result: IApiResponse<Buffer>) =>
         });
 }
 
-export function updateImage(id: number, image: any, callback: (result: number) => void): void {
-    callback(500);
+function base64_encode(file: PathLike) {
+    // read binary data
+    const bitmap = readFileSync(file);
+    // convert binary data to base64 encoded string
+    return new Buffer(bitmap).toString('base64');
+}
+
+export function updateImage(id: number, image: Express.Multer.File, callback: (result: number) => void): void {
+    const str = "data:" + image.mimetype + ";base64," + base64_encode(config.uploadDirectory + image.filename);
+    dataConnection.query("UPDATE Projects SET imageData=? WHERE id=?",
+        [str, id])
+        .then(() => {
+            callback(201);
+        })
+        .catch(() => {
+            callback(500);
+        });
 }
 
 export function submitPledge(id: number, pledge: IPledge, callback: (result: number) => void): void {

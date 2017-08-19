@@ -1,3 +1,4 @@
+import {createReadStream} from "fs";
 import {Test} from "nodeunit";
 import {RequestResponse} from "request";
 import {isArray, isNullOrUndefined} from "util";
@@ -66,7 +67,7 @@ function testContentType(test: Test, contentType: string | string[], regExp: Reg
     }
 }
 
-function sendRequest(url: string, method: string, headers: any, body?: any): Promise<RequestResponse> {
+function sendRequest(url: string, method: string, headers: any, body?: any, formData?: any): Promise<RequestResponse> {
     const options: any = {
         uri: apiPath + url,
         method: method,
@@ -78,6 +79,10 @@ function sendRequest(url: string, method: string, headers: any, body?: any): Pro
     if (!isNullOrUndefined(body)) {
         options.body = JSON.stringify(body);
         headers["content-type"] = "application/json";
+    }
+
+    if (!isNullOrUndefined(formData)) {
+        options.formData = formData;
     }
 
     return request(options);
@@ -339,8 +344,40 @@ export function testProjectsId(test: Test): void {
 }
 
 export function testProjectsModify(test: Test): void {
-    test.ok(false);
-    test.done();
+    let token: string = null;
+
+    sendRequest("projects/1", "PUT", {}, {open: true})
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 401);
+
+            return sendRequest("users/login?username=dclemett0&password=secret", "POST", {});
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            testContentType(test, response.headers["content-type"], /^application\/json/);
+
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
+
+            objectHasInteger(json, "id");
+            objectHasString(json, "token");
+
+            token = json.token;
+
+            return sendRequest("projects/1", "PUT", {"x-authorization": token}, {open: true});
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 201);
+            test.done();
+        })
+        .catch(error => {
+            test.ok(false, error);
+            test.done();
+        });
 }
 
 export function testProjectsImage(test: Test): void {
@@ -355,8 +392,38 @@ export function testProjectsImage(test: Test): void {
 }
 
 export function testProjectsModifyImage(test: Test): void {
-    test.ok(false);
-    test.done();
+    let token: string = null;
+
+    let formData = {
+        image: createReadStream(__dirname + "/../../PNG_transparency_demonstration_1.png")
+    };
+
+    sendRequest("users/login?username=dclemett0&password=secret", "POST", {})
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 200);
+
+            testContentType(test, response.headers["content-type"], /^application\/json/);
+
+            response.setEncoding("utf8");
+            const json: any = JSON.parse(response.body);
+
+            objectHasInteger(json, "id");
+            objectHasString(json, "token");
+
+            token = json.token;
+
+            return sendRequest("projects/1/image", "PUT", {"x-authorization": token}, null, formData);
+        })
+        .then(response => {
+            const statusCode: number = response.statusCode;
+            test.equal(statusCode, 201);
+            test.done();
+        })
+        .catch(error => {
+            test.ok(false, error);
+            test.done();
+        });
 }
 
 export function testProjectsSubmitPledge(test: Test): void {

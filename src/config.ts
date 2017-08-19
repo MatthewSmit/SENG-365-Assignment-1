@@ -3,6 +3,7 @@ import {IPoolConfig} from "mysql";
 interface IConfig {
     mysql: IPoolConfig;
     tokenSecret: string;
+    uploadDirectory: string;
 }
 
 const config: IConfig = {
@@ -15,7 +16,8 @@ const config: IConfig = {
         database: "crowdfunder",
         multipleStatements: true
     },
-    tokenSecret: "LhC1lSHg7aX1JqvoqlxJm8qJlxg5QUnz"
+    tokenSecret: "LhC1lSHg7aX1JqvoqlxJm8qJlxg5QUnz",
+    uploadDirectory: __dirname + "/upload/"
 };
 
 export = config;

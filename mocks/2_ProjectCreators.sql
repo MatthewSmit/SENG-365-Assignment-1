@@ -6,6 +6,7 @@ create table ProjectCreators (
 	FOREIGN KEY(user_id) REFERENCES Users(id)
 );
 insert into ProjectCreators (project_id, user_id) values (1, 74);
+insert into ProjectCreators (project_id, user_id) values (1, 1);
 insert into ProjectCreators (project_id, user_id) values (2, 972);
 insert into ProjectCreators (project_id, user_id) values (3, 256);
 insert into ProjectCreators (project_id, user_id) values (4, 983);

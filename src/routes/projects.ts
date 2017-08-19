@@ -1,11 +1,14 @@
 import {Response, Router} from "express";
-import formidable = require("express-formidable");
+import multer = require("multer");
 import {isArray, isBoolean, isNullOrUndefined} from "util";
 
 import {IPledge, IProjectData, IReward, verifyPledge, verifyProjectData, verifyReward} from "../controllers/interfaces";
 import projects = require("../controllers/projects");
+import config = require("../config");
 import {DataConnection} from "../dataConnection";
 import {sendResponse, getId, getToken} from "./routeHelper";
+
+const upload = multer({ dest: config.uploadDirectory });
 
 export = function(dataConnection: DataConnection): Router {
     projects.setup(dataConnection);
@@ -66,15 +69,25 @@ export = function(dataConnection: DataConnection): Router {
         .put((request, response) => {
             const id: number = getId(request);
             const open: boolean = request.body.open;
-            if (id === null) {
-                sendResponse(response, 404, null);
-            } else if (!isBoolean(open)) {
-                sendResponse(response, 400, null);
-            } else {
-                projects.updateProject(id, open, result => {
-                    sendResponse(response, result, null);
+
+            //TODO: verify user owns project
+            getToken(dataConnection, request)
+                .then(token => {
+                    if (token === null) {
+                        sendResponse(response, 401, null);
+                    } else if (id === null) {
+                        sendResponse(response, 404, null);
+                    } else if (!isBoolean(open)) {
+                        sendResponse(response, 400, null);
+                    } else {
+                        projects.updateProject(id, open, result => {
+                            sendResponse(response, result, null);
+                        });
+                    }
+                })
+                .catch(() => {
+                    sendResponse(response, 500, null);
                 });
-            }
         });
 
     router.route("/projects/:id/image")
@@ -93,17 +106,29 @@ export = function(dataConnection: DataConnection): Router {
                 });
             }
         })
-        .put(formidable, (request: any, response: Response) => {
+        .put(upload.single("image"), (request: any, response: Response) => {
             const id: number = getId(request);
-            if (id === null) {
-                sendResponse(response, 404, null);
-            } else if (isNullOrUndefined(request.files.file)) {
-                sendResponse(response, 400, null);
-            } else {
-                projects.updateImage(id, request.files.file, result => {
-                    sendResponse(response, result, null);
+
+            //TODO: verify user owns project
+            getToken(dataConnection, request)
+                .then(token => {
+                    if (token === null) {
+                        sendResponse(response, 401, null);
+                    } else if (id === null) {
+                        sendResponse(response, 404, null);
+                    } else if (isNullOrUndefined(request.file)) {
+                        sendResponse(response, 400, null);
+                    } else if (!request.file.mimetype.match(/^image\/png/) && !request.file.mimetype.match(/^image\/jpeg/)) {
+                        sendResponse(response, 400, null);
+                    } else {
+                        projects.updateImage(id, request.file, result => {
+                            sendResponse(response, result, null);
+                        });
+                    }
+                })
+                .catch(() => {
+                    sendResponse(response, 500, null);
                 });
-            }
         });
 
     router.route("/projects/:id/pledge")
