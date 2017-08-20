@@ -2,6 +2,7 @@ import {DataConnection} from "../dataConnection";
 import {IApiResponse, IBacker, ICreator, IPledge, IProjectData, IProjectDetails, IProjectOverview, IReward} from "./interfaces";
 import {PathLike, readFileSync} from "fs";
 import config = require("../config");
+import {ITokenData} from "../token";
 
 const DEFAULT_IMAGE: string = "data:image/png;base64," +
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U" +
@@ -235,8 +236,21 @@ export function getRewards(id: number, callback: (result: IApiResponse<IReward[]
         });
 }
 
-export function updateRewards(id: number, rewards: [IReward], callback: (result: number) => void): void {
-    callback(500);
+export function updateRewards(id: number, rewards: IReward[], callback: (result: number) => void): void {
+    let query = "DELETE FROM Rewards WHERE project_id=?;";
+    let data: any[] = [id];
+    for (let reward of rewards) {
+        query += "INSERT INTO Rewards (project_id, amount, description) VALUES (?, ?, ?);";
+        data.push(id, reward.amount, reward.description);
+    }
+
+    dataConnection.query(query, data)
+        .then(rows => {
+            callback(201);
+        })
+        .catch(() => {
+            callback(500);
+        });
 }
 
 export function getImage(id: number, callback: (result: IApiResponse<Buffer>) => void): void {
@@ -297,6 +311,13 @@ export function updateImage(id: number, image: Express.Multer.File, callback: (r
         });
 }
 
-export function submitPledge(id: number, pledge: IPledge, callback: (result: number) => void): void {
-    callback(500);
+export function submitPledge(id: number, token: ITokenData, pledge: IPledge, callback: (result: number) => void): void {
+    dataConnection.query("INSERT INTO Backers (project_id, user_id, amount, private) VALUES (?, ?, ?, ?)",
+        [id, token.id, pledge.amount, pledge.anonymous])
+        .then(rows => {
+            callback(200);
+        })
+        .catch(() => {
+            callback(500);
+        });
 }

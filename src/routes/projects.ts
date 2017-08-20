@@ -9,9 +9,26 @@ import {DataConnection} from "../dataConnection";
 import {sendResponse, getId, getToken} from "./routeHelper";
 
 const upload = multer({ dest: config.uploadDirectory });
+let dataConnection: DataConnection;
 
-export = function(dataConnection: DataConnection): Router {
-    projects.setup(dataConnection);
+function ownsProject(response: Response, projectId: number, userId: number, ownsCallback: () => void, notOwnsCallback: () => void) {
+    dataConnection.query("SELECT * FROM ProjectCreators WHERE project_id=? AND user_id=?", [projectId, userId])
+        .then(rows => {
+            if (rows.length === 0) {
+                notOwnsCallback();
+            }
+            else {
+                ownsCallback();
+            }
+        })
+        .catch(() => {
+            sendResponse(response, 500, null);
+        });
+}
+
+export = function(newDataConnection: DataConnection): Router {
+    dataConnection = newDataConnection;
+    projects.setup(newDataConnection);
 
     const router: Router = Router();
 
@@ -70,7 +87,6 @@ export = function(dataConnection: DataConnection): Router {
             const id: number = getId(request);
             const open: boolean = request.body.open;
 
-            //TODO: verify user owns project
             getToken(dataConnection, request)
                 .then(token => {
                     if (token === null) {
@@ -80,8 +96,12 @@ export = function(dataConnection: DataConnection): Router {
                     } else if (!isBoolean(open)) {
                         sendResponse(response, 400, null);
                     } else {
-                        projects.updateProject(id, open, result => {
-                            sendResponse(response, result, null);
+                        ownsProject(response, id, token.id, () => {
+                            projects.updateProject(id, open, result => {
+                                sendResponse(response, result, null);
+                            });
+                        }, () => {
+                            sendResponse(response, 403, null);
                         });
                     }
                 })
@@ -109,7 +129,6 @@ export = function(dataConnection: DataConnection): Router {
         .put(upload.single("image"), (request: any, response: Response) => {
             const id: number = getId(request);
 
-            //TODO: verify user owns project
             getToken(dataConnection, request)
                 .then(token => {
                     if (token === null) {
@@ -121,8 +140,12 @@ export = function(dataConnection: DataConnection): Router {
                     } else if (!request.file.mimetype.match(/^image\/png/) && !request.file.mimetype.match(/^image\/jpeg/)) {
                         sendResponse(response, 400, null);
                     } else {
-                        projects.updateImage(id, request.file, result => {
-                            sendResponse(response, result, null);
+                        ownsProject(response, id, token.id, () => {
+                            projects.updateImage(id, request.file, result => {
+                                sendResponse(response, result, null);
+                            });
+                        }, () => {
+                            sendResponse(response, 403, null);
                         });
                     }
                 })
@@ -135,15 +158,28 @@ export = function(dataConnection: DataConnection): Router {
         .post((request, response) => {
             const id: number = getId(request);
             const pledge: IPledge = request.body;
-            if (id === null) {
-                sendResponse(response, 404, null);
-            } else if (!verifyPledge(pledge)) {
-                sendResponse(response, 400, null);
-            } else {
-                projects.submitPledge(id, pledge, result => {
-                    sendResponse(response, result, null);
+
+            getToken(dataConnection, request)
+                .then(token => {
+                    if (token === null) {
+                        sendResponse(response, 401, null);
+                    } else if (id === null) {
+                        sendResponse(response, 404, null);
+                    } else if (!verifyPledge(pledge)) {
+                        sendResponse(response, 400, null);
+                    } else {
+                        ownsProject(response, id, token.id, () => {
+                            sendResponse(response, 403, null);
+                        }, () => {
+                            projects.submitPledge(id, token, pledge, result => {
+                                sendResponse(response, result, null);
+                            });
+                        });
+                    }
+                })
+                .catch(() => {
+                    sendResponse(response, 500, null);
                 });
-            }
         });
 
     router.route("/projects/:id/rewards")
@@ -159,27 +195,38 @@ export = function(dataConnection: DataConnection): Router {
         })
         .put((request, response) => {
             const id: number = getId(request);
-            const rewards: IReward[] = request.body.rewards;
-            if (id === null) {
-                sendResponse(response, 404, null);
-            } else if (!isArray(rewards)) {
-                sendResponse(response, 400, null);
-            } else {
-                let valid: boolean = true;
-                for (let reward of rewards) {
-                    if (!verifyReward(reward)) {
-                        valid = false;
-                    }
-                }
+            const rewards: IReward[] = request.body;
 
-                if (!valid) {
-                    sendResponse(response, 400, null);
-                } else {
-                    projects.updateRewards(id, <[any]>rewards, result => {
-                        sendResponse(response, result, null);
-                    });
-                }
-            }
+            getToken(dataConnection, request)
+                .then(token => {
+                    if (id === null) {
+                        sendResponse(response, 404, null);
+                    } else if (!isArray(rewards)) {
+                        sendResponse(response, 400, null);
+                    } else {
+                        let valid: boolean = true;
+                        for (let reward of rewards) {
+                            if (!verifyReward(reward)) {
+                                valid = false;
+                            }
+                        }
+
+                        if (!valid) {
+                            sendResponse(response, 400, null);
+                        } else {
+                            ownsProject(response, id, token.id, () => {
+                                projects.updateRewards(id, rewards, result => {
+                                    sendResponse(response, result, null);
+                                });
+                            }, () => {
+                                sendResponse(response, 403, null);
+                            });
+                        }
+                    }
+                })
+                .catch(() => {
+                    sendResponse(response, 500, null);
+                });
         });
 
     return router;

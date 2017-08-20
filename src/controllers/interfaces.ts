@@ -112,7 +112,7 @@ export interface IPledge {
 
 export function verifyPledge(pledge: any): boolean {
     return "id" in pledge && Number.isInteger(pledge.id) &&
-        "amount" in pledge && Number.isInteger(pledge.amount) &&
+        "amount" in pledge && Number.isInteger(pledge.amount) && pledge.amount > 0 &&
         "anonymous" in pledge && isBoolean(pledge.anonymous) &&
         "card" in pledge && "authToken" in pledge.card && isString(pledge.card.authToken);
 }
